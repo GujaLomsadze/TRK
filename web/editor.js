@@ -84,6 +84,9 @@
         h("select", { id: "opt-hide", class: "ed-select" }, HIDE_OPTS.map(([m, label]) =>
           h("option", { value: m, selected: m === (view ? view.hide_after_min : 300) ? "" : null }, label))),
         h("p", { class: "meta" }, "Applies to every browser. A hidden card comes back as soon as its session gets busy again; ✕ on a card hides it right away.")),
+      view && view.terminals_supported ? h("section", { class: "ed-group" }, h("h3", null, "Experimental"),
+        h("div", { class: "ed-row" }, toggle("exp:terminals", "Terminals in the dashboard", !!view.experimental_terminals)),
+        h("p", { class: "meta" }, "Adds “+ Agent”: start claude in a folder and use it in a terminal right here. Those agents run inside TRK and stop when TRK restarts, updates or is stopped. Applies to every browser.")) : null,
       h("section", { class: "ed-group" }, h("h3", null, "Dashboard areas"),
         h("div", { class: "ed-row" }, Object.entries(AREAS).map(([k, label]) => toggle("area:" + k, label, layout.areas[k])))));
   }
@@ -94,6 +97,12 @@
     if (t.dataset.preset) { const p = presetLayout(t.dataset.preset); p.areas = layout.areas; p.grid = layout.grid; setLayout(p); draw(); }
     else if (t.dataset.grid) { const [k, n] = t.dataset.grid.split(":"); update((l) => { l.grid[k] = Number(n); }); }
     else if (t.dataset.move) { const [a, b] = t.dataset.move.split(":").map(Number); move(a, b); }
+    else if (t.dataset.tog === "exp:terminals") {
+      const on = t.getAttribute("aria-pressed") !== "true";
+      t.setAttribute("aria-pressed", String(on));
+      fetch("/v1/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ experimental_terminals: on }) }).catch(() => {});
+    }
     else if (t.dataset.tog) {
       const [kind, k] = t.dataset.tog.split(":");
       update((l) => {

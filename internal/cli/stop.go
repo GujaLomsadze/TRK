@@ -19,7 +19,9 @@ func stopCmd(stdout, stderr io.Writer) int {
 	}
 	c := client.Default()
 	running := c.Healthy()
+	agents := 0
 	if running {
+		agents = c.DashboardAgents()
 		c.Shutdown()
 		for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline) && c.Healthy(); {
 			time.Sleep(100 * time.Millisecond)
@@ -28,12 +30,22 @@ func stopCmd(stdout, stderr io.Writer) int {
 	u.banner(stdout, "stopped")
 	if running {
 		u.row(stdout, u.ok("✓"), "Service", "stopped")
+		if agents > 0 {
+			u.row(stdout, u.warn("!"), "Agents", agentsGone(agents))
+		}
 	} else {
 		u.row(stdout, u.dim("·"), "Service", u.dim("wasn't running"))
 	}
 	u.row(stdout, u.ok("✓"), "Hooks", "paused"+u.dim(" — Claude keeps working normally, nothing is recorded"))
 	fmt.Fprintf(stdout, "\n  Start again with %s\n\n", u.accent("trk open"))
 	return 0
+}
+
+func agentsGone(n int) string {
+	if n == 1 {
+		return "1 agent started from the dashboard was stopped with it"
+	}
+	return fmt.Sprintf("%d agents started from the dashboard were stopped with it", n)
 }
 
 // resume clears the pause so the daemon can run and agents report again.

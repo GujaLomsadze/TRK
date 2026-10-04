@@ -159,3 +159,20 @@ func SpawnDaemon() error {
 	}
 	return cmd.Process.Release()
 }
+
+// DashboardAgents counts agents running in terminals the daemon owns (experimental
+// "+ Agent"). They end when the daemon does. 0 when unreachable or on older daemons.
+func (c *Client) DashboardAgents() int {
+	resp, err := c.HTTP.Get(c.BaseURL + "/v1/terms")
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+	var v struct {
+		Running int `json:"running"`
+	}
+	if resp.StatusCode != http.StatusOK || json.NewDecoder(resp.Body).Decode(&v) != nil {
+		return 0
+	}
+	return v.Running
+}

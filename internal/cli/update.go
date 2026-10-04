@@ -85,6 +85,10 @@ func applyUpdate(stdout, stderr io.Writer, u ui, up *update.Updater, latest stri
 	u.row(stdout, u.ok("✓"), "Updated", fmt.Sprintf("%s → %s", version.Version, strings.TrimPrefix(latest, "v"))+u.dim(" (checksum verified)"))
 	c := client.Default()
 	if c.Healthy() {
+		agents := c.DashboardAgents()
+		if agents > 0 {
+			u.row(stdout, u.warn("!"), "Agents", agentsGone(agents))
+		}
 		if c.Restart(3 * time.Second) {
 			u.row(stdout, u.ok("✓"), "Daemon", "restarted on the new version")
 		} else {

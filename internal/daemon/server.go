@@ -17,6 +17,7 @@ import (
 	"github.com/GujaLomsadze/trk/internal/fleet"
 	"github.com/GujaLomsadze/trk/internal/model"
 	"github.com/GujaLomsadze/trk/internal/store"
+	"github.com/GujaLomsadze/trk/internal/term"
 	"github.com/GujaLomsadze/trk/internal/version"
 	"github.com/GujaLomsadze/trk/web"
 )
@@ -24,12 +25,14 @@ import (
 const maxBody = 4 << 20
 
 type Server struct {
-	st    *store.Store
-	fl    *fleet.Fleet
-	hub   *Hub
-	log   *log.Logger
-	now   func() int64
-	dirty atomic.Bool
+	st      *store.Store
+	fl      *fleet.Fleet
+	hub     *Hub
+	log     *log.Logger
+	now     func() int64
+	dirty   atomic.Bool
+	terms   *term.Manager // experimental: dashboard-started agents
+	termsOn atomic.Bool
 	// OnShutdown stops the daemon; set by Run. Used by `trk update` to restart into the new binary.
 	OnShutdown func()
 	// OnStop pauses TRK (hooks stop respawning it) and then shuts down; set by Run.
@@ -37,7 +40,9 @@ type Server struct {
 }
 
 func NewServer(st *store.Store, fl *fleet.Fleet, logger *log.Logger) *Server {
-	return &Server{st: st, fl: fl, hub: NewHub(), log: logger, now: func() int64 { return time.Now().UnixMilli() }}
+	s := &Server{st: st, fl: fl, hub: NewHub(), log: logger, now: func() int64 { return time.Now().UnixMilli() }, terms: term.NewManager()}
+	s.terms.OnChange = func() { s.dirty.Store(true) }
+	return s
 }
 
 func (s *Server) Handler() http.Handler {
@@ -47,6 +52,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/sessions/{id}", s.getSession)
 	mux.HandleFunc("POST /v1/sessions/{id}/dismiss", s.dismiss)
 	mux.HandleFunc("POST /v1/settings", s.settings)
+	mux.HandleFunc("GET /v1/terms", s.listTerms)
+	mux.HandleFunc("POST /v1/terms", s.startTerm)
+	mux.HandleFunc("DELETE /v1/terms/{id}", s.stopTerm)
+	mux.HandleFunc("GET /v1/terms/{id}/ws", s.attachTerm)
 	mux.HandleFunc("GET /v1/account", s.getAccount)
 	mux.HandleFunc("GET /v1/limits/history", s.getLimitHistory)
 	mux.HandleFunc("GET /v1/stream", s.stream)
@@ -125,7 +134,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 
 func (s *Server) getSessions(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, s.fl.View(s.now()))
+	writeJSON(w, s.dash())
 }
 
 func (s *Server) getSession(w http.ResponseWriter, r *http.Request) {
@@ -171,17 +180,27 @@ const maxHideAfterMin = 30 * 24 * 60
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		HideAfterMin *int `json:"hide_after_min"`
+		HideAfterMin          *int  `json:"hide_after_min"`
+		ExperimentalTerminals *bool `json:"experimental_terminals"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil || body.HideAfterMin == nil ||
-		*body.HideAfterMin < 0 || *body.HideAfterMin > maxHideAfterMin {
-		http.Error(w, "want {\"hide_after_min\": 0..43200} (0 = never)", http.StatusBadRequest)
+	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body)
+	badHide := body.HideAfterMin != nil && (*body.HideAfterMin < 0 || *body.HideAfterMin > maxHideAfterMin)
+	if err != nil || badHide || (body.HideAfterMin == nil && body.ExperimentalTerminals == nil) {
+		http.Error(w, "want {\"hide_after_min\": 0..43200} (0 = never) and/or {\"experimental_terminals\": bool}", http.StatusBadRequest)
 		return
 	}
-	m := *body.HideAfterMin
-	s.fl.SetHideAfter(int64(m) * 60000)
-	if err := s.st.SetSetting("hide_after_min", strconv.Itoa(m)); err != nil {
-		s.log.Printf("save setting: %v", err)
+	if body.HideAfterMin != nil {
+		m := *body.HideAfterMin
+		s.fl.SetHideAfter(int64(m) * 60000)
+		if err := s.st.SetSetting("hide_after_min", strconv.Itoa(m)); err != nil {
+			s.log.Printf("save setting: %v", err)
+		}
+	}
+	if on := body.ExperimentalTerminals; on != nil {
+		s.SetTerminals(*on)
+		if err := s.st.SetSetting(settingTerminals, strconv.FormatBool(*on)); err != nil {
+			s.log.Printf("save setting: %v", err)
+		}
 	}
 	s.dirty.Store(true)
 	w.WriteHeader(http.StatusNoContent)
@@ -247,7 +266,7 @@ func (s *Server) stop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) snapshot() []byte {
-	b, err := json.Marshal(s.fl.View(s.now()))
+	b, err := json.Marshal(s.dash())
 	if err != nil {
 		s.log.Printf("snapshot: %v", err)
 		return []byte("{}")

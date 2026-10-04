@@ -119,3 +119,21 @@ func TestPausedSendsNothingAndNeverSpawns(t *testing.T) {
 		t.Fatalf("paused client sent=%d spawned=%d", hits.Load(), spawned.Load())
 	}
 }
+
+func TestDashboardAgents(t *testing.T) {
+	for _, c := range []struct {
+		status int
+		body   string
+		want   int
+	}{{200, `{"running":2,"terminals":[]}`, 2}, {404, `404 page not found`, 0}, {200, `garbage`, 0}} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(c.status)
+			_, _ = w.Write([]byte(c.body))
+		}))
+		cl := &Client{BaseURL: srv.URL, HTTP: srv.Client()}
+		if got := cl.DashboardAgents(); got != c.want {
+			t.Errorf("%d %q: got %d, want %d", c.status, c.body, got, c.want)
+		}
+		srv.Close()
+	}
+}

@@ -294,6 +294,40 @@ body.no-limits .limits { display: none; }
 .w-legend i { display: inline-block; width: 8px; height: 6px; margin-right: 4px; vertical-align: middle; }
 .w-bg { color: var(--yellow); }
 
+/* experimental: New agent modal (agents.js) and its terminal (term.js) */
+#agent-open .ag-count { margin-left: 8px; background: var(--accent); color: var(--accent-fg); text-shadow: none; padding: 1px 6px; font-size: 16px; }
+dialog.agents { width: min(1200px, calc(100vw - 32px)); height: min(820px, calc(100vh - 32px)); max-width: none; max-height: none; padding: 0;
+  color: var(--text); display: none; flex-direction: column; }
+dialog.agents[open] { display: flex; }
+dialog.agents::backdrop { background: rgba(11,6,5,0.7); }
+.ag-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--rule-soft); flex-wrap: wrap; }
+.ag-exp { font: 15px/1 var(--font-deco); text-transform: uppercase; color: var(--warn); border: 1px solid rgba(255,178,122,0.4); padding: 3px 6px; }
+.ag-actions { margin-left: auto; display: flex; gap: 6px; }
+.ag-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); }
+.ag-tabs { border-right: 1px solid var(--rule-soft); padding: 10px; display: grid; gap: 6px; align-content: start; overflow-y: auto; }
+.ag-tab { display: grid; gap: 2px; text-align: left; background: transparent; border: 1px solid var(--rule-soft); color: var(--text);
+  font: 13px var(--font-read); padding: 8px 10px; cursor: pointer; border-radius: var(--radius); min-width: 0; }
+.ag-tab[aria-pressed="true"] { border-color: var(--accent); background: rgba(255,90,74,0.08); }
+.ag-tab.ag-new { color: var(--chip-accent-fg); font: 18px/1 var(--font-deco); text-transform: uppercase; }
+.ag-sub { font: 11px var(--font-read); color: var(--muted); text-transform: none; }
+.ag-live .ag-sub { color: var(--ok); }
+.ag-main { min-width: 0; min-height: 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.ag-meta { font-size: 12px; color: var(--muted); }
+.ag-term { flex: 1; min-height: 0; background: var(--bg); border: 1px solid var(--rule-soft); padding: 6px; }
+.ag-form { display: grid; gap: 8px; max-width: 640px; }
+.ag-lab { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px; }
+.ag-form input, .ag-form textarea { background: var(--bg); color: var(--text); border: 1px solid var(--border); font: 14px var(--font-read); padding: 10px 12px; border-radius: var(--radius); width: 100%; }
+.ag-form textarea { min-height: 90px; resize: vertical; }
+.ag-recent { display: flex; flex-wrap: wrap; gap: 6px; }
+.ag-recent button { background: transparent; border: 1px solid var(--rule-soft); color: var(--muted); font: 12px var(--font-read); padding: 5px 8px; cursor: pointer; border-radius: var(--radius); }
+.ag-recent button:hover { color: var(--text); border-color: var(--border); }
+.ag-go { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+.ag-go .btn[disabled] { opacity: 0.45; cursor: default; }
+.ag-err { color: var(--red); font-size: 13px; }
+.ag-note { margin: auto; display: grid; gap: 12px; justify-items: center; color: var(--muted); text-align: center; }
+.ag-note b { font: 26px/1 var(--font-deco); color: var(--text); text-transform: uppercase; }
+@media (max-width: 700px) { .ag-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); } .ag-tabs { border-right: 0; border-bottom: 1px solid var(--rule-soft); grid-auto-flow: column; overflow-x: auto; } }
+
 .scanlines { position: fixed; inset: 0; pointer-events: none; z-index: 10;
   background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,0.16) 3px, transparent 4px); }
 .icon-btn { min-width: 44px; justify-content: center; padding: 0 10px; font-size: 22px; }

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRK.EXE · agent</title>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="vendor/xterm.css">
+<style>
+  html, body { height: 100%; }
+  body { padding: 10px 12px 12px; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; }
+  .bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .bar .title { font-size: 26px; }
+  .bar .meta { flex: 1; min-width: 0; }
+  #term { min-height: 0; background: var(--bg); border: 1px solid var(--rule-soft); padding: 6px; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1 class="title" id="name">TRK.EXE</h1>
+  <span class="meta one" id="where"></span>
+  <span class="meta" id="state"></span>
+  <button class="btn btn-secondary" id="stop" type="button">Stop claude</button>
+</div>
+<div id="term"></div>
+<div class="scanlines" aria-hidden="true"></div>
+<script src="vendor/xterm.js"></script>
+<script src="vendor/addon-fit.js"></script>
+<script src="term.js"></script>
+<script>
+"use strict";
+// Pop-out window for one dashboard-started agent. Closing it keeps the agent running.
+(async function () {
+  const id = new URLSearchParams(location.search).get("id") || "";
+  const $ = (x) => document.getElementById(x);
+  const list = await fetch("/v1/terms").then((r) => r.json()).catch(() => ({ terminals: [] }));
+  const t = (list.terminals || []).find((x) => x.id === id);
+  if (!t) { $("state").textContent = "This agent is gone (stopped, or TRK restarted)."; $("stop").hidden = true; return; }
+  document.title = "TRK · " + t.name;
+  $("name").textContent = t.name;
+  $("where").textContent = t.dir;
+  const v = TRKTerm.attach($("term"), id, {
+    onState: (s) => ($("state").textContent = s === "live" ? "" : s),
+    onExit: () => { $("state").textContent = "claude exited"; $("stop").textContent = "Remove"; },
+  });
+  v.focus();
+  $("stop").addEventListener("click", async () => {
+    if ($("stop").textContent !== "Remove" && !confirm("Stop claude in " + t.name + "?")) return;
+    v.dispose();
+    await TRKTerm.stop(id);
+    window.close();
+  });
+})();
+</script>
+</body>
+</html>

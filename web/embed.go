@@ -3,5 +3,5 @@ package web
 
 import "embed"
 
-//go:embed index.html app.js editor.js theme.css stats.html stats.js stats.css fonts
+//go:embed index.html app.js editor.js theme.css stats.html stats.js stats.css term.html term.js agents.js vendor fonts
 var FS embed.FS

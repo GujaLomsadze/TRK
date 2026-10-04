@@ -365,6 +365,7 @@ function render() {
   renderGrid(view);
   renderSide(view);
   renderTimeline(view);
+  if (window.TRKAgents) TRKAgents.update(view);
 }
 
 // Between snapshots only clocks move; header/inbox/timeline are cheap and have no animation.
@@ -394,7 +395,9 @@ $("grid").addEventListener("click", async (e) => {
 
 let stopped = false;
 $("power").addEventListener("click", async () => {
-  if (!confirm("Stop TRK?\n\nClaude keeps working; nothing is recorded until you run `trk open`.")) return;
+  const own = window.TRKAgents ? TRKAgents.running() : 0;
+  const warn = own ? `\n\n${own} agent${own === 1 ? "" : "s"} started from the dashboard will be stopped.` : "";
+  if (!confirm("Stop TRK?\n\nClaude keeps working; nothing is recorded until you run `trk open`." + warn)) return;
   try { await fetch("/v1/stop", { method: "POST" }); } catch { /* daemon may close the connection as it exits */ }
   stopped = true;
   $("stopped").hidden = false;

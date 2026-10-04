@@ -64,6 +64,13 @@ func Run(ctx context.Context, o Options) error {
 	ctx, stopAll := context.WithCancel(ctx)
 	defer stopAll()
 	srv := NewServer(st, fl, o.Logger)
+	defer srv.CloseTerminals()                        // dashboard-started agents end with the daemon
+	if c := os.Getenv("TRK_AGENT_COMMAND"); c != "" { // testing: run something other than claude
+		srv.terms.Command = c
+	}
+	if v, ok, err := st.Setting(settingTerminals); err == nil && ok {
+		srv.SetTerminals(v == "true")
+	}
 	srv.OnShutdown = stopAll
 	srv.OnStop = func() {
 		if err := os.WriteFile(filepath.Join(o.DataDir, "paused"), []byte("paused from the dashboard\n"), 0o644); err != nil {
