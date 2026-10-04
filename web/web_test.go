@@ -68,3 +68,17 @@ func TestDefaultLayout(t *testing.T) {
 		t.Fatalf("app.js Default preset is not the chosen default:\n%s", want)
 	}
 }
+
+// Each page holds one /v1/stream. A page parked in the back/forward cache keeps it open,
+// and HTTP/1.1 allows 6 connections per host: after a few Fleet↔Stats trips the next page
+// can't load. Both pages must close the stream on pagehide and reopen it on pageshow.
+func TestStreamClosedOnPagehide(t *testing.T) {
+	for _, f := range []string{"app.js", "stats.js"} {
+		js, _ := os.ReadFile(f)
+		for _, want := range []string{`addEventListener("pagehide"`, `addEventListener("pageshow"`, "es.close()"} {
+			if !strings.Contains(string(js), want) {
+				t.Errorf("%s lacks %s", f, want)
+			}
+		}
+	}
+}
