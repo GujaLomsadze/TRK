@@ -9,8 +9,8 @@ import (
 func TestDescribe(t *testing.T) {
 	cases := []struct {
 		tool, input, cwd string
-		sum, file       string
-		edit            bool
+		sum, file        string
+		edit             bool
 	}{
 		{"Bash", `{"command":"go   test ./...\nsecond line"}`, "", "go   test ./...", "", false},
 		{"Edit", `{"file_path":"/r/a/main.go","old_string":"x"}`, "/r/a", "main.go", "/r/a/main.go", true},
