@@ -84,6 +84,7 @@ All optional:
 | `TRK_URL` | — | Full daemon URL override, e.g. to reach a daemon on the other side of WSL. Disables auto-spawn. |
 | `TRK_DATA_DIR` | `~/.local/share/trk` · `~/Library/Application Support/trk` · `%APPDATA%\trk` | SQLite event log + daemon log |
 | `TRK_SESSION` | — | Force which session CLI calls are attributed to |
+| `TRK_MAX_DB_MB` | `5120` | Database size cap. Past it, the oldest raw events are trimmed; session summaries stay |
 | `TRK_NO_UPDATE_CHECK` | — | Set to anything to stop `trk open` from checking GitHub for updates |
 
 ## How TRK works with Claude Code (and why it won't break it)

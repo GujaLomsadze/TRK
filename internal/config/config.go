@@ -91,3 +91,12 @@ func SetPaused(on bool) error {
 	}
 	return os.WriteFile(f, []byte("paused by trk stop\n"), 0o644)
 }
+
+// MaxDBBytes caps the event database (TRK_MAX_DB_MB, default 5 GB). Past it,
+// the oldest raw events are trimmed; session summaries stay.
+func MaxDBBytes() int64 {
+	if mb, err := strconv.ParseInt(os.Getenv("TRK_MAX_DB_MB"), 10, 64); err == nil && mb > 0 {
+		return mb << 20
+	}
+	return 5 << 30
+}

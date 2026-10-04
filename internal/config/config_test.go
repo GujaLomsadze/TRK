@@ -50,3 +50,12 @@ func TestPausedFlag(t *testing.T) {
 		t.Fatalf("clearing twice: %v", err)
 	}
 }
+
+func TestMaxDBBytes(t *testing.T) {
+	for in, want := range map[string]int64{"": 5 << 30, "100": 100 << 20, "0": 5 << 30, "-3": 5 << 30, "junk": 5 << 30} {
+		t.Setenv("TRK_MAX_DB_MB", in)
+		if got := MaxDBBytes(); got != want {
+			t.Errorf("TRK_MAX_DB_MB=%q → %d, want %d", in, got, want)
+		}
+	}
+}

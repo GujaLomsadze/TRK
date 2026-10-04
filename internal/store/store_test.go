@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/GujaLomsadze/trk/internal/model"
@@ -177,5 +178,39 @@ func TestUpgradeFromSchema1(t *testing.T) {
 	all, err := s.Sessions()
 	if err != nil || len(all) != 1 || all[0].Name != "kept" || all[0].DismissedAt != 0 {
 		t.Fatalf("after upgrade: %+v %v", all, err)
+	}
+}
+
+func TestTrimToSizeDropsOldestEventsOnly(t *testing.T) {
+	s, _ := open(t)
+	big := json.RawMessage(`{"blob":"` + strings.Repeat("x", 4000) + `"}`)
+	for i := 0; i < 300; i++ { // ~1.2 MB of payload
+		if err := s.Append(&model.Event{TS: int64(i), SessionID: "a", Source: "hook", Kind: "tool_post", Payload: big}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.UpsertSession(model.Session{SessionID: "a", Name: "keep me"})
+	before, _ := s.UsedBytes()
+	const max = 600 << 10
+	if before <= max {
+		t.Fatalf("test setup too small: %d", before)
+	}
+	deleted, err := s.TrimToSize(max)
+	if err != nil || deleted == 0 {
+		t.Fatalf("deleted=%d err=%v", deleted, err)
+	}
+	after, _ := s.UsedBytes()
+	if after > max {
+		t.Fatalf("still %d bytes used, cap %d", after, max)
+	}
+	left, _ := s.EventsSince(0)
+	if len(left) == 0 || left[len(left)-1].TS != 299 || left[0].TS == 0 {
+		t.Fatalf("expected newest kept and oldest gone, got %d events from ts %d", len(left), left[0].TS)
+	}
+	if ss, _ := s.Sessions(); len(ss) != 1 || ss[0].Name != "keep me" {
+		t.Fatal("session rows must survive trimming")
+	}
+	if n, _ := s.TrimToSize(max); n != 0 {
+		t.Fatalf("second trim deleted %d (already under cap)", n)
 	}
 }

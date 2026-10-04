@@ -44,7 +44,7 @@ func serve(stdout, stderr io.Writer) int {
 	defer stop()
 	addr := fmt.Sprintf("127.0.0.1:%d", config.Port())
 	err = daemon.Run(ctx, daemon.Options{
-		Addr: addr, DataDir: dir, Logger: log.New(logw, "", log.LstdFlags),
+		Addr: addr, DataDir: dir, Logger: log.New(logw, "", log.LstdFlags), MaxDBBytes: config.MaxDBBytes(),
 		OnListen: func(string) { fmt.Fprintf(stdout, "trk serving http://localhost:%d\n", config.Port()) },
 	})
 	if errors.Is(err, daemon.ErrAlreadyRunning) {

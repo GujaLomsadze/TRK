@@ -229,3 +229,54 @@ func (s *Store) SetSetting(key, value string) error {
 	_, err := s.db.Exec(`INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	return err
 }
+
+// UsedBytes is the space the database actually occupies: pages in use, not
+// free pages left behind by deletes (SQLite reuses those for new rows).
+func (s *Store) UsedBytes() (int64, error) {
+	var pages, free, size int64
+	if err := s.db.QueryRow(`PRAGMA page_count`).Scan(&pages); err != nil {
+		return 0, err
+	}
+	if err := s.db.QueryRow(`PRAGMA freelist_count`).Scan(&free); err != nil {
+		return 0, err
+	}
+	if err := s.db.QueryRow(`PRAGMA page_size`).Scan(&size); err != nil {
+		return 0, err
+	}
+	return (pages - free) * size, nil
+}
+
+// TrimToSize deletes the oldest raw events once the database uses more than max
+// bytes, down to 90% of max, so it stops growing. Session and account rows are
+// never touched. Returns how many events were removed.
+func (s *Store) TrimToSize(max int64) (int64, error) {
+	used, err := s.UsedBytes()
+	if err != nil || used <= max {
+		return 0, err
+	}
+	target := max / 10 * 9
+	var rows int64
+	if err := s.db.QueryRow(`SELECT count(*) FROM events`).Scan(&rows); err != nil {
+		return 0, err
+	}
+	batch := rows / 20 // trim in 5% steps so we stop close to the target
+	if batch < 50 {
+		batch = 50
+	}
+	var total int64
+	for used > target {
+		res, err := s.db.Exec(`DELETE FROM events WHERE id IN (SELECT id FROM events ORDER BY id LIMIT ?)`, batch)
+		if err != nil {
+			return total, err
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			break // nothing left to trim
+		}
+		total += n
+		if used, err = s.UsedBytes(); err != nil {
+			return total, err
+		}
+	}
+	return total, nil
+}

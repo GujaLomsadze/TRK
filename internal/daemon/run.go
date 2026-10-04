@@ -22,10 +22,11 @@ import (
 var ErrAlreadyRunning = errors.New("trk daemon already running")
 
 type Options struct {
-	Addr     string
-	DataDir  string
-	Logger   *log.Logger
-	OnListen func(addr string)
+	MaxDBBytes int64 // trim oldest events past this size; 0 = no cap
+	Addr       string
+	DataDir    string
+	Logger     *log.Logger
+	OnListen   func(addr string)
 }
 
 // Run binds first (the port is the single-instance lock), then opens the store,
@@ -74,6 +75,9 @@ func Run(ctx context.Context, o Options) error {
 	loopCtx, stopLoop := context.WithCancel(ctx)
 	defer stopLoop()
 	go srv.Loop(loopCtx)
+	if o.MaxDBBytes > 0 {
+		go trimLoop(loopCtx, st, o.MaxDBBytes, o.Logger)
+	}
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -126,4 +130,22 @@ func isTrk(addr string) bool {
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	return strings.Contains(string(b), `"app":"trk"`)
+}
+
+// trimLoop keeps the database under its size cap: once at startup, then hourly.
+func trimLoop(ctx context.Context, st *store.Store, max int64, logger *log.Logger) {
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for {
+		if n, err := st.TrimToSize(max); err != nil {
+			logger.Printf("trim: %v", err)
+		} else if n > 0 {
+			logger.Printf("trim: removed %d oldest events to stay under %d MB", n, max>>20)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
