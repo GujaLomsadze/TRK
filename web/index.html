@@ -27,10 +27,10 @@
     <section class="panel box"><h2>Collisions</h2><ul class="list" id="collisions"></ul></section>
   </aside>
 </main>
-<section class="panel box timeline">
-  <h2>Last 30 minutes</h2>
-  <div class="tl-scroll" id="tl-scroll"><div id="timeline"></div></div>
-  <div class="tl-legend"><span class="tl-key tl-read"></span>read <span class="tl-key tl-edit"></span>edit <span class="tl-key tl-run"></span>run <span class="tl-key tl-wait"></span>waiting on you</div>
+<section class="panel timeline" aria-label="last 30 minutes">
+  <div class="tl-head"><h2>Last 30 minutes</h2>
+    <div class="tl-legend"><span class="tl-key tl-read"></span>read <span class="tl-key tl-edit"></span>edit <span class="tl-key tl-run"></span>run <span class="tl-key tl-wait"></span>waiting on you</div></div>
+  <div class="tl-body" id="timeline"></div>
 </section>
 <div class="scanlines" aria-hidden="true"></div>
 <script src="app.js"></script>

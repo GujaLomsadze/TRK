@@ -3,7 +3,6 @@
 
 let view = null;
 let skew = 0; // server clock - local clock
-let firstTimeline = true;
 const DASH = "—";
 const $ = (id) => document.getElementById(id);
 const now = () => Date.now() + skew;
@@ -106,7 +105,7 @@ function ctxGauge(s) {
   return h("div", { class: "ctx ctx-" + c.level },
     h("div", { class: "ctx-line" }, "ctx " + pct(s.ctx_pct) + size),
     cellBar((s.ctx_pct || 0) / 100, ctxCell, "small"),
-    (c.hints || []).map((t) => h("div", { class: "ctx-hint" }, "▲ " + t)));
+    h("div", { class: "ctx-hints" }, (c.hints || []).map((t) => h("div", { class: "ctx-hint one", title: t }, "▲ " + t))));
 }
 
 const lastTop = new Map(); // session_id -> newest tool line seen
@@ -120,20 +119,24 @@ function card(s) {
   const top = s.recent && s.recent[0] ? s.recent[0].tool + s.recent[0].summary : "";
   const fresh = top && lastTop.has(s.session_id) && lastTop.get(s.session_id) !== top;
   lastTop.set(s.session_id, top);
+  // Every slot is always rendered with a reserved height, so cards never change
+  // shape as data comes and goes (spec: nothing jumps).
+  const tools = (s.recent || []).slice(0, 3);
+  while (tools.length < 3) tools.push(null);
   return h("article", { class: "panel card st-" + s.status + (s.attention ? " attention" : "") },
     h("div", { class: "card-head" },
-      h("div", null, h("h3", { class: "card-name" }, s.name), h("div", { class: "meta" }, where)),
+      h("div", { class: "head-text" }, h("h3", { class: "card-name one", title: s.name }, s.name), h("div", { class: "meta one", title: where }, where || DASH)),
       h("span", { class: "chip chip-" + tone }, label)),
-    s.task ? h("p", { class: "task" }, s.task) : h("p", { class: "task muted" }, "no task declared"),
-    n || s.step_text ? h("div", { class: "step" }, n ? `step ${i}/${n}` : "step", s.step_text ? " · " + s.step_text : "",
-      s.status === "working" ? h("span", { class: "cursor", "aria-hidden": "true" }) : null) : null,
-    n ? h("div", null, cellBar(i / n, progCell)) : null,
-    s.reality ? h("div", { class: "reality" }, h("span", { class: "reality-label" }, "reality"), s.reality) : null,
-    s.recent && s.recent.length
-      ? h("ul", { class: "tools" }, s.recent.map((c, k) =>
-          h("li", { class: "tool tool-" + c.state + (k === 0 && fresh ? " flash" : ""), title: c.tool + " " + c.summary },
-            "› ", h("span", { class: "tool-name" }, c.tool), " ", c.summary, " ", h("span", { class: "mark" }, mark(c.state)))))
-      : null,
+    h("p", { class: "slot-task" + (s.task ? "" : " muted"), title: s.task || "" }, s.task || "no task declared"),
+    h("div", { class: "slot-step one", title: s.step_text || "" },
+      n ? `step ${i}/${n}` : "step " + DASH, s.step_text ? " · " + s.step_text : "",
+      s.status === "working" ? h("span", { class: "cursor", "aria-hidden": "true" }) : null),
+    h("div", { class: "slot-bar" }, cellBar(n ? i / n : 0, progCell)),
+    h("div", { class: "slot-reality" }, s.reality ? h("div", { class: "reality" }, h("span", { class: "reality-label" }, "reality"), s.reality) : null),
+    h("ul", { class: "tools" }, tools.map((c, k) => c
+      ? h("li", { class: "tool one tool-" + c.state + (k === 0 && fresh ? " flash" : ""), title: c.tool + " " + c.summary },
+          "› ", h("span", { class: "tool-name" }, c.tool), " ", c.summary, " ", h("span", { class: "mark" }, mark(c.state)))
+      : h("li", { class: "tool one blank" }, k === 0 && !s.recent?.length ? "no tool calls yet" : "\u00a0"))),
     ctxGauge(s),
     h("footer", { class: "card-foot" },
       h("span", { class: "live-elapsed", "data-since": s.started_at }, "elapsed " + dur(now() - s.started_at)),
@@ -186,28 +189,29 @@ function renderSide(v) {
     : [h("li", { class: "muted" }, "none")]));
 }
 
+// Docked at the bottom, fits the window (no horizontal scroll). Positions are
+// percentages of the 30-minute window; one lane per card, in card order.
 function renderTimeline(v) {
-  const W = 1800, end = now(), start = end - 30 * 60 * 1000;
-  const x = (t) => ((Math.max(start, Math.min(end, t)) - start) / (end - start)) * W;
-  const axis = h("div", { class: "tl-track", style: `width:${W}px` });
-  for (let m = 30; m >= 0; m -= 5) axis.append(h("span", { class: "tl-tick", style: `left:${x(end - m * 60000)}px` }, m ? `-${m}m` : "now"));
-  const lanes = v.sessions.filter((s) => s.timeline && s.timeline.length).map((s) => {
-    const track = h("div", { class: "tl-track", style: `width:${W}px` });
-    for (const b of s.timeline) {
+  const end = now(), span = 30 * 60 * 1000, start = end - span;
+  const x = (t) => ((Math.max(start, Math.min(end, t)) - start) / span) * 100;
+  const axis = h("div", { class: "tl-track tl-axis-track" });
+  for (let m = 30; m >= 0; m -= 5) axis.append(h("span", { class: "tl-tick", style: `left:${x(end - m * 60000)}%` }, m ? `-${m}m` : "now"));
+  const lanes = v.sessions.map((s) => {
+    const track = h("div", { class: "tl-track" });
+    for (const b of s.timeline || []) {
       const l = x(b.start), r = x(b.end || end);
-      track.append(h("span", { class: "tl-block tl-" + b.cat, style: `left:${l}px;width:${Math.max(2, r - l)}px`,
+      track.append(h("span", { class: "tl-block tl-" + b.cat, style: `left:${l}%;width:max(2px,${r - l}%)`,
         title: `${b.cat} · ${dur((b.end || end) - b.start)}` }));
     }
-    return h("div", { class: "tl-lane" }, h("div", { class: "tl-label", title: s.name }, s.name), track);
+    return h("div", { class: "tl-lane" }, h("div", { class: "tl-label one", title: s.name }, s.name), track);
   });
   $("timeline").replaceChildren(
-    h("div", { class: "tl-axis" }, h("div", { class: "tl-label" }, ""), axis),
+    h("div", { class: "tl-lane tl-axis" }, h("div", { class: "tl-label" }, ""), axis),
     ...(lanes.length ? lanes : [h("div", { class: "muted" }, "no activity in the last 30 minutes")]));
-  if (firstTimeline && lanes.length) {
-    $("tl-scroll").scrollLeft = $("tl-scroll").scrollWidth;
-    firstTimeline = false;
-  }
 }
+
+// Keep page content clear of the docked timeline.
+new ResizeObserver(([e]) => document.body.style.setProperty("--dock-h", e.target.offsetHeight + "px")).observe(document.querySelector(".timeline"));
 
 function render() {
   if (!view) return;
