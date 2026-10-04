@@ -306,9 +306,18 @@ function tick() {
 
 function setConn(live) {
   const el = $("conn");
-  el.textContent = live ? "● live" : "○ reconnecting";
+  el.textContent = live ? "● live" : stopped ? "■ stopped" : "○ reconnecting";
   el.classList.toggle("live", live);
 }
+
+let stopped = false;
+$("power").addEventListener("click", async () => {
+  if (!confirm("Stop TRK?\n\nClaude keeps working; nothing is recorded until you run `trk open`.")) return;
+  try { await fetch("/v1/stop", { method: "POST" }); } catch { /* daemon may close the connection as it exits */ }
+  stopped = true;
+  $("stopped").hidden = false;
+  setConn(false);
+});
 
 function connect() {
   const es = new EventSource("/v1/stream");
@@ -318,7 +327,7 @@ function connect() {
     setConn(true);
     render();
   });
-  es.onerror = () => setConn(false); // EventSource reconnects by itself
+  es.onerror = () => { setConn(false); if (stopped) es.close(); }; // EventSource reconnects by itself
 }
 
 applyAreas();

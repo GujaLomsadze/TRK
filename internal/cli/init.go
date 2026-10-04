@@ -60,6 +60,7 @@ func initCmd(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	daemonUp := false
 	if !*dry {
+		resume()
 		daemonUp = client.Default().EnsureDaemon(3 * time.Second)
 	}
 	renderInit(stdout, newUI(stdout), res, paths, *dry, daemonUp, config.Port())

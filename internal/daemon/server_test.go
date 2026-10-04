@@ -201,3 +201,24 @@ func TestShutdownEndpoint(t *testing.T) {
 		t.Fatal("OnShutdown not called")
 	}
 }
+
+func TestStopEndpoint(t *testing.T) {
+	ts, s := newTestServer(t)
+	stopped := make(chan struct{}, 1)
+	s.OnStop = func() { stopped <- struct{}{} }
+	req, _ := http.NewRequest("POST", ts.URL+"/v1/stop", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	if resp, _ := http.DefaultClient.Do(req); resp.StatusCode != 403 {
+		t.Fatalf("foreign origin stop = %d", resp.StatusCode)
+	}
+	req, _ = http.NewRequest("POST", ts.URL+"/v1/stop", nil)
+	req.Header.Set("Origin", "http://localhost:7777") // the dashboard's own button
+	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("stop = %v %v", resp, err)
+	}
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("OnStop not called")
+	}
+}

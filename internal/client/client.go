@@ -24,6 +24,7 @@ type Client struct {
 	BaseURL     string
 	HTTP        *http.Client
 	AllowSpawn  bool
+	Paused      bool // `trk stop` was run: send nothing, spawn nothing
 	Spawn       func() error
 	SpawnBudget time.Duration
 }
@@ -33,12 +34,16 @@ func Default() *Client {
 		BaseURL:     config.BaseURL(),
 		HTTP:        &http.Client{Timeout: Timeout},
 		AllowSpawn:  config.IsLocalDefault() && os.Getenv("TRK_NO_SPAWN") == "",
+		Paused:      config.IsLocalDefault() && config.Paused(),
 		Spawn:       SpawnDaemon,
 		SpawnBudget: time.Second,
 	}
 }
 
 func (c *Client) Send(env model.Envelope) bool {
+	if c.Paused {
+		return false
+	}
 	body, err := json.Marshal(env)
 	if err != nil {
 		return false

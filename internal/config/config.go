@@ -54,3 +54,40 @@ func DataDir() (string, error) {
 	}
 	return filepath.Join(home, ".local", "share", "trk"), nil
 }
+
+// The pause flag is a file in the data dir. While it exists, every client call
+// is a silent no-op and nothing auto-spawns the daemon (`trk stop` sets it,
+// `trk open` / `trk serve` clear it).
+func pausedFile() string {
+	dir, err := DataDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "paused")
+}
+
+func Paused() bool {
+	f := pausedFile()
+	if f == "" {
+		return false
+	}
+	_, err := os.Stat(f)
+	return err == nil
+}
+
+func SetPaused(on bool) error {
+	f := pausedFile()
+	if f == "" {
+		return fmt.Errorf("no data dir")
+	}
+	if !on {
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(f, []byte("paused by trk stop\n"), 0o644)
+}

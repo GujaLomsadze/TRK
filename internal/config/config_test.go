@@ -34,3 +34,19 @@ func TestDataDirOverride(t *testing.T) {
 		t.Fatalf("DataDir() = %q, %v", got, err)
 	}
 }
+
+func TestPausedFlag(t *testing.T) {
+	t.Setenv("TRK_DATA_DIR", t.TempDir()+"/nested")
+	if Paused() {
+		t.Fatal("paused before anything set it")
+	}
+	if err := SetPaused(true); err != nil || !Paused() {
+		t.Fatalf("SetPaused(true): err=%v paused=%v", err, Paused())
+	}
+	if err := SetPaused(false); err != nil || Paused() {
+		t.Fatalf("SetPaused(false): err=%v paused=%v", err, Paused())
+	}
+	if err := SetPaused(false); err != nil {
+		t.Fatalf("clearing twice: %v", err)
+	}
+}

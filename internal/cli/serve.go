@@ -22,6 +22,7 @@ import (
 )
 
 func serve(stdout, stderr io.Writer) int {
+	resume() // running serve by hand means "I want TRK on"
 	dir, err := config.DataDir()
 	if err == nil {
 		err = os.MkdirAll(dir, 0o755)
@@ -59,6 +60,7 @@ func serve(stdout, stderr io.Writer) int {
 
 func open(stdin io.Reader, stdout, stderr io.Writer) int {
 	url := config.BaseURL() + "/"
+	resume()
 	offerUpdate(stdin, stdout, stderr)
 	c := client.Default()
 	if staleDaemon(c.DaemonVersion(), version.Version) {

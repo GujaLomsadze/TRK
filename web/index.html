@@ -19,6 +19,7 @@
     <span class="btn btn-secondary disabled" title="coming later">Timeline</span>
     <span class="btn btn-secondary disabled" title="coming later">Orbit</span>
     <button class="btn btn-secondary icon-btn" id="layout-open" type="button" aria-haspopup="dialog" aria-label="Card layout" title="Card layout">⚙</button>
+    <button class="btn btn-secondary icon-btn" id="power" type="button" aria-label="Stop TRK" title="Stop TRK">⏻</button>
   </nav>
 </header>
 <main class="layout">
@@ -33,6 +34,14 @@
     <div class="tl-legend"><span class="tl-key tl-read"></span>read <span class="tl-key tl-edit"></span>edit <span class="tl-key tl-run"></span>run <span class="tl-key tl-wait"></span>waiting on you</div></div>
   <div class="tl-body" id="timeline"></div>
 </section>
+<div class="stopped" id="stopped" hidden>
+  <div class="panel stopped-box" role="status">
+    <h2>TRK stopped</h2>
+    <p>Claude keeps working normally; nothing is recorded while TRK is off.</p>
+    <p>Start it again from a terminal:</p>
+    <code>trk open</code>
+  </div>
+</div>
 <div class="scanlines" aria-hidden="true"></div>
 <dialog class="panel drawer" id="layout" aria-labelledby="layout-title">
   <div class="drawer-head"><h2 class="drawer-title" id="layout-title">⚙ Card layout</h2>

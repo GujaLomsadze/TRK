@@ -64,6 +64,12 @@ func Run(ctx context.Context, o Options) error {
 	defer stopAll()
 	srv := NewServer(st, fl, o.Logger)
 	srv.OnShutdown = stopAll
+	srv.OnStop = func() {
+		if err := os.WriteFile(filepath.Join(o.DataDir, "paused"), []byte("paused from the dashboard\n"), 0o644); err != nil {
+			o.Logger.Printf("pause: %v", err)
+		}
+		stopAll()
+	}
 	hs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second} // no WriteTimeout: SSE
 	loopCtx, stopLoop := context.WithCancel(ctx)
 	defer stopLoop()

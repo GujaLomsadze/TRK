@@ -108,3 +108,14 @@ func TestVersionAndShutdown(t *testing.T) {
 		t.Fatalf("down daemon version = %q", v)
 	}
 }
+
+func TestPausedSendsNothingAndNeverSpawns(t *testing.T) {
+	var hits, spawned atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1); w.WriteHeader(202) }))
+	defer ts.Close()
+	c := &Client{BaseURL: ts.URL, HTTP: &http.Client{Timeout: 200 * time.Millisecond}, Paused: true,
+		AllowSpawn: true, Spawn: func() error { spawned.Add(1); return nil }, SpawnBudget: time.Second}
+	if c.Send(model.Envelope{Source: "hook"}) || hits.Load() != 0 || spawned.Load() != 0 {
+		t.Fatalf("paused client sent=%d spawned=%d", hits.Load(), spawned.Load())
+	}
+}

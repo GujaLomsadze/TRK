@@ -31,6 +31,8 @@ type Server struct {
 	dirty atomic.Bool
 	// OnShutdown stops the daemon; set by Run. Used by `trk update` to restart into the new binary.
 	OnShutdown func()
+	// OnStop pauses TRK (hooks stop respawning it) and then shuts down; set by Run.
+	OnStop func()
 }
 
 func NewServer(st *store.Store, fl *fleet.Fleet, logger *log.Logger) *Server {
@@ -46,6 +48,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/stream", s.stream)
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("POST /v1/shutdown", s.shutdown)
+	mux.HandleFunc("POST /v1/stop", s.stop)
 	mux.Handle("GET /", http.FileServerFS(web.FS))
 	return guard(mux)
 }
@@ -149,6 +152,13 @@ func (s *Server) shutdown(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 	if s.OnShutdown != nil {
 		go s.OnShutdown()
+	}
+}
+
+func (s *Server) stop(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusAccepted)
+	if s.OnStop != nil {
+		go s.OnStop()
 	}
 }
 

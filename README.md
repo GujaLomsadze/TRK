@@ -27,6 +27,14 @@ Worried about your Claude setup? Read [How TRK works with Claude Code](#how-trk-
 
 You never need to run `trk serve` yourself: the first `trk` call that finds no daemon starts one in the background.
 
+## Stopping TRK
+
+```sh
+trk stop     # or the ⏻ button in the dashboard header
+```
+
+This stops the service and pauses the hooks: Claude keeps working exactly as before, `trk` calls from agents and the status line quietly do nothing, and nothing is recorded. Run `trk open` to start again.
+
 ## Updating
 
 ```sh

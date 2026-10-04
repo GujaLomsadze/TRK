@@ -11,7 +11,8 @@ import (
 const usageText = `trk — live tracker for coding agents
 
   trk serve                      run daemon + dashboard (auto-spawned when needed)
-  trk open                       open the dashboard
+  trk open                       open the dashboard (resumes TRK if stopped)
+  trk stop                       stop TRK; hooks pause until trk open
   trk init                       wire up Claude Code hooks, status line, CLAUDE.md
   trk update [--check]           install the latest release (restarts the daemon)
 
@@ -50,6 +51,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return serve(stdout, stderr)
 	case "open":
 		return open(stdin, stdout, stderr)
+	case "stop":
+		return stopCmd(stdout, stderr)
 	case "update":
 		return updateCmd(rest, stdout, stderr)
 	case "init":
