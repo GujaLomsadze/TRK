@@ -50,6 +50,18 @@
     return li;
   }
 
+  const gridRow = (k, label, max) => h("div", { class: "ed-grid-row" }, h("span", { class: "ed-grid-lab" }, label),
+    h("div", { class: "ed-row", role: "group", "aria-label": label },
+      [0, ...Array.from({ length: max }, (_, i) => i + 1)].map((n) =>
+        h("button", { class: "btn btn-secondary", type: "button", "aria-pressed": layout.grid[k] === n ? "true" : "false", "data-grid": k + ":" + n }, n || "Auto"))));
+  function gridSummary() {
+    const { cols, rows } = layout.grid;
+    if (!cols && !rows) return "Cards wrap to fit the width at their natural height.";
+    const c = cols ? cols + (cols === 1 ? " column" : " columns") : "as many columns as fit";
+    const r = rows ? `, ${rows} ${rows === 1 ? "row" : "rows"} filling the window` : ", natural height";
+    return c + r + (cols && rows ? ` (${cols * rows} cards on screen; more scroll)` : "") + ".";
+  }
+
   const toggle = (id, label, on) => h("button", { class: "ed-tog", type: "button", "aria-pressed": on ? "true" : "false", "data-tog": id }, label);
 
   function draw() {
@@ -58,6 +70,9 @@
       h("section", { class: "ed-group" }, h("h3", null, "Presets"),
         h("div", { class: "ed-row" }, Object.keys(PRESETS).map((name) =>
           h("button", { class: "btn btn-secondary", type: "button", "aria-pressed": layout.preset === name ? "true" : "false", "data-preset": name }, name)))),
+      h("section", { class: "ed-group" }, h("h3", null, "Card grid"),
+        gridRow("cols", "Columns", GRID_COLS), gridRow("rows", "Rows on screen", GRID_ROWS),
+        h("p", { class: "meta" }, gridSummary(), layout.grid.rows ? " Content taller than a row is clipped." : "")),
       h("section", { class: "ed-group" }, h("h3", null, "Widgets, top to bottom ", h("span", { class: "meta" }, `${shown} of ${layout.slots.length} shown`)),
         h("ul", { class: "ed-slots" }, layout.slots.map(slotRow)),
         h("p", { class: "meta" }, "Drag ⠿ or use the arrows to reorder. The card header and footer stay pinned.")),
@@ -74,7 +89,8 @@
   body.addEventListener("click", (e) => {
     const t = e.target.closest("button");
     if (!t) return;
-    if (t.dataset.preset) { const p = presetLayout(t.dataset.preset); p.areas = layout.areas; setLayout(p); draw(); }
+    if (t.dataset.preset) { const p = presetLayout(t.dataset.preset); p.areas = layout.areas; p.grid = layout.grid; setLayout(p); draw(); }
+    else if (t.dataset.grid) { const [k, n] = t.dataset.grid.split(":"); update((l) => { l.grid[k] = Number(n); }); }
     else if (t.dataset.move) { const [a, b] = t.dataset.move.split(":").map(Number); move(a, b); }
     else if (t.dataset.tog) {
       const [kind, k] = t.dataset.tog.split(":");

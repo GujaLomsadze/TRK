@@ -127,8 +127,11 @@ function presetLayout(name) {
   const first = p.order || p.on; // a preset may place hidden widgets too
   const order = [...first, ...Object.keys(WIDGETS).filter((id) => !first.includes(id))];
   return { preset: name, slots: order.map((id) => ({ id, on: p.on.includes(id) })), tools: p.tools, hints: p.hints,
-    reserve: p.reserve, footer: [...p.footer], areas: { needs: true, collisions: true, timeline: true, limits: true } };
+    reserve: p.reserve, footer: [...p.footer], areas: { needs: true, collisions: true, timeline: true, limits: true }, grid: { cols: 0, rows: 0 } };
 }
+// Card grid: columns and rows on screen; 0 means automatic.
+const GRID_COLS = 6, GRID_ROWS = 4;
+const gridNum = (v, max) => (Number.isInteger(v) && v >= 0 && v <= max ? v : 0);
 // loadLayout trusts nothing from storage: unknown widgets are dropped, missing ones appended (off).
 function loadLayout() {
   const def = presetLayout("Default");
@@ -146,6 +149,7 @@ function loadLayout() {
     reserve: saved.reserve !== false,
     footer: (Array.isArray(saved.footer) ? saved.footer : def.footer).filter((k) => FOOTER_STATS[k]).slice(0, 4),
     areas: Object.fromEntries(Object.keys(AREAS).map((k) => [k, !saved.areas || saved.areas[k] !== false])),
+    grid: { cols: gridNum(saved.grid && saved.grid.cols, GRID_COLS), rows: gridNum(saved.grid && saved.grid.rows, GRID_ROWS) },
   };
 }
 let layout = loadLayout();
@@ -155,6 +159,7 @@ function setLayout(next) {
   cards.clear();
   $("grid").replaceChildren();
   applyAreas();
+  applyGrid();
   render();
 }
 function applyAreas() {
@@ -164,6 +169,24 @@ function applyAreas() {
   document.querySelector(".side .needs-box").hidden = !layout.areas.needs;
   document.querySelector(".side .coll-box").hidden = !layout.areas.collisions;
 }
+
+function applyGrid() {
+  const g = $("grid"), { cols, rows } = layout.grid;
+  g.classList.toggle("fixed-cols", cols > 0);
+  g.style.setProperty("--cols", cols || 1);
+  g.classList.toggle("fixed-rows", rows > 0);
+  fitRows();
+}
+// Fixed rows: size cards so `rows` rows fill the window above the docked timeline.
+function fitRows() {
+  const g = $("grid"), rows = layout.grid.rows;
+  if (!rows) { g.style.removeProperty("--row-h"); return; }
+  const dock = layout.areas.timeline ? document.querySelector(".timeline").offsetHeight + 28 : 16;
+  const top = g.getBoundingClientRect().top + scrollY;
+  const avail = innerHeight - top - dock - 16 * (rows - 1);
+  g.style.setProperty("--row-h", Math.max(160, Math.floor(avail / rows)) + "px");
+}
+addEventListener("resize", fitRows);
 
 const lastTop = new Map(); // session_id -> newest tool line seen
 const mark = (st) => (st === "ok" ? "✓" : st === "fail" ? "✗" : "…");
@@ -289,7 +312,7 @@ function renderTimeline(v) {
 }
 
 // Keep page content clear of the docked timeline.
-new ResizeObserver(([e]) => document.body.style.setProperty("--dock-h", e.target.offsetHeight + "px")).observe(document.querySelector(".timeline"));
+new ResizeObserver(([e]) => { document.body.style.setProperty("--dock-h", e.target.offsetHeight + "px"); fitRows(); }).observe(document.querySelector(".timeline"));
 
 function render() {
   if (!view) return;
@@ -350,5 +373,6 @@ addEventListener("pagehide", () => { if (es) { es.close(); es = null; } });
 addEventListener("pageshow", (e) => { if (e.persisted && !es && !stopped) connect(); });
 
 applyAreas();
+applyGrid();
 connect();
 setInterval(tick, 1000);

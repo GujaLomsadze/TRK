@@ -73,6 +73,10 @@ ul { list-style: none; margin: 0; padding: 0; }
 /* layout */
 .layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.grid.fixed-cols { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
+.grid.fixed-rows { grid-auto-rows: var(--row-h, auto); }
+.grid.fixed-rows > .card { height: 100%; }
+@media (max-width: 700px) { .grid.fixed-cols { grid-template-columns: minmax(0, 1fr); } .grid.fixed-rows { grid-auto-rows: auto; } }
 .side { display: grid; gap: 16px; }
 .empty { color: var(--muted); padding: 24px; text-align: center; }
 @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .nav { margin-left: 0; } }
@@ -210,6 +214,9 @@ dialog.drawer::backdrop { background: rgba(11,6,5,0.55); }
 .ed-group h3 { font: 600 12px/1.3 var(--font-read); text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 0; }
 .ed-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .ed-row .btn { min-height: 36px; font-size: 18px; }
+.ed-grid-row { display: grid; gap: 6px; }
+.ed-grid-lab { font-size: 12px; color: var(--muted); }
+.ed-grid-row .btn { min-width: 44px; justify-content: center; padding: 0 10px; }
 .btn[aria-pressed="true"] { border-color: var(--accent); background: rgba(255,90,74,0.1); }
 .ed-slots { display: grid; gap: 6px; }
 .ed-slot { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 10px;

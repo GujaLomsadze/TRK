@@ -82,3 +82,19 @@ func TestStreamClosedOnPagehide(t *testing.T) {
 		}
 	}
 }
+
+// Card grid: columns (auto, 1–6) and rows on screen (auto, 1–4) are picked in the drawer.
+func TestCardGridSetting(t *testing.T) {
+	for f, wants := range map[string][]string{
+		"app.js":    {"const GRID_COLS = 6, GRID_ROWS = 4;", "grid: { cols: 0, rows: 0 }", "function applyGrid(", "function fitRows("},
+		"editor.js": {`"Card grid"`, `"data-grid"`, "p.grid = layout.grid"},
+		"theme.css": {".grid.fixed-cols {", ".grid.fixed-rows {"},
+	} {
+		src, _ := os.ReadFile(f)
+		for _, w := range wants {
+			if !strings.Contains(string(src), w) {
+				t.Errorf("%s lacks %s", f, w)
+			}
+		}
+	}
+}
