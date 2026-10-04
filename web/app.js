@@ -22,10 +22,37 @@ function h(tag, props, ...kids) {
   return el;
 }
 
-function bar(frac, cells = 20) {
-  const f = Math.max(0, Math.min(1, frac || 0));
-  const n = Math.round(f * cells);
-  return "[" + "█".repeat(n) + "░".repeat(cells - n) + "]";
+// Per-cell ASCII bars: 20 cells, each coloured by its own position (picked design "B").
+const CELLS = 20;
+const RGB = { red: [255, 90, 74], amber: [255, 178, 122], green: [92, 255, 157], yellow: [255, 214, 107], hot: [255, 74, 61], deep: [255, 40, 60] };
+const mix = (a, b, t) => a.map((v, k) => Math.round(v + (b[k] - v) * Math.min(1, Math.max(0, t))));
+// progress: red → amber → green, so a bar only shows green near the finish
+const progCell = (i) => (i < 12 ? mix(RGB.red, RGB.amber, i / 11) : mix(RGB.amber, RGB.green, (i - 11) / 8));
+// context (user bands): green < 40, yellow 40–59, red ≥ 60; cell i covers up to (i+1)*5 %
+const ctxCell = (i) => {
+  const p = (i + 1) * 5;
+  if (p < 40) return mix(RGB.green, RGB.yellow, Math.max(0, (p - 20) / 20) * 0.5);
+  if (p < 60) return mix(RGB.yellow, RGB.amber, (p - 40) / 20);
+  return mix(RGB.hot, RGB.deep, (p - 60) / 40);
+};
+// plan usage (5h / 7d): green < 50, yellow 50–79, red ≥ 80
+const useCell = (i) => {
+  const p = (i + 1) * 5;
+  if (p < 50) return mix(RGB.green, RGB.yellow, Math.max(0, (p - 25) / 25) * 0.5);
+  if (p < 80) return mix(RGB.yellow, RGB.amber, (p - 50) / 30);
+  return mix(RGB.hot, RGB.deep, (p - 80) / 20);
+};
+function cellBar(frac, colorOf, cls = "") {
+  const n = Math.round(Math.max(0, Math.min(1, frac || 0)) * CELLS);
+  const el = h("span", { class: "cellbar " + cls }, "[");
+  for (let i = 0; i < CELLS; i++) {
+    if (i < n) {
+      const c = colorOf(i).join(",");
+      el.append(h("span", { style: `color:rgb(${c});text-shadow:0 0 6px rgba(${c},.55)` }, "█"));
+    } else el.append(h("span", { class: "off" }, "░"));
+  }
+  el.append("]");
+  return el;
 }
 function dur(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -46,10 +73,9 @@ const pct = (v) => (v == null ? DASH : Math.round(v) + "%");
 const money = (v) => "$" + (v || 0).toFixed(2);
 
 const CHIP = {
-  working: ["WORKING", "accent"], waiting: ["WAITING ON YOU", "warn"], blocked: ["BLOCKED", "warn"],
-  looping: ["LOOPING?", "warn"], idle: ["IDLE", "done"], done: ["DONE", "done"],
+  working: ["WORKING", "work"], waiting: ["WAITING ON YOU", "warn"], blocked: ["BLOCKED", "red"],
+  looping: ["LOOPING?", "warn"], idle: ["IDLE", "done"], done: ["DONE", "ok"],
 };
-const TONE = { working: "accent", waiting: "warn", blocked: "warn", looping: "warn", idle: "done", done: "done" };
 const NEED_LABEL = { permission: "permission", question: "question", blocked: "blocked" };
 
 function renderHeader(v) {
@@ -69,8 +95,8 @@ function limit(label, p, reset) {
   const live = p != null && (!reset || reset > now());
   return h("div", { class: "limit" },
     h("span", { class: "limit-label" }, label),
-    h("span", { class: "ascii " + (live && p >= 80 ? "tone-warn" : "tone-accent") }, bar(live ? p / 100 : 0)),
-    h("span", null, live ? Math.round(p) + "%" : DASH),
+    cellBar(live ? p / 100 : 0, useCell),
+    h("span", { class: "limit-pct", style: live ? `color:var(${p >= 80 ? "--red" : p >= 50 ? "--yellow" : "--ok"})` : null }, live ? Math.round(p) + "%" : DASH),
     h("span", { class: "meta" }, live && reset ? "resets " + dur(reset - now()) : ""));
 }
 
@@ -78,28 +104,34 @@ function ctxGauge(s) {
   const c = s.ctx || { level: "none" };
   const size = s.ctx_size ? " of " + tokens(s.ctx_size) : "";
   return h("div", { class: "ctx ctx-" + c.level },
-    h("div", { class: "ctx-line" },
-      h("span", null, "ctx " + pct(s.ctx_pct) + size),
-      h("span", { class: "ascii ctx-bar" }, bar((s.ctx_pct || 0) / 100, 10))),
+    h("div", { class: "ctx-line" }, "ctx " + pct(s.ctx_pct) + size),
+    cellBar((s.ctx_pct || 0) / 100, ctxCell, "small"),
     (c.hints || []).map((t) => h("div", { class: "ctx-hint" }, "▲ " + t)));
 }
+
+const lastTop = new Map(); // session_id -> newest tool line seen
 
 function card(s) {
   const [label, tone] = CHIP[s.status] || CHIP.working;
   const n = s.step_n || 0, i = s.step_i || 0;
   const where = [s.repo, s.branch].filter(Boolean).join(" · ") || s.cwd || "";
   const mark = (st) => (st === "ok" ? "✓" : st === "fail" ? "✗" : "…");
-  return h("article", { class: "panel card" + (s.attention ? " attention" : "") },
+  // flash the newest tool line when it changes
+  const top = s.recent && s.recent[0] ? s.recent[0].tool + s.recent[0].summary : "";
+  const fresh = top && lastTop.has(s.session_id) && lastTop.get(s.session_id) !== top;
+  lastTop.set(s.session_id, top);
+  return h("article", { class: "panel card st-" + s.status + (s.attention ? " attention" : "") },
     h("div", { class: "card-head" },
       h("div", null, h("h3", { class: "card-name" }, s.name), h("div", { class: "meta" }, where)),
       h("span", { class: "chip chip-" + tone }, label)),
     s.task ? h("p", { class: "task" }, s.task) : h("p", { class: "task muted" }, "no task declared"),
-    n || s.step_text ? h("div", { class: "step" }, n ? `step ${i}/${n}` : "step", s.step_text ? " · " + s.step_text : "") : null,
-    n ? h("div", { class: "ascii tone-" + (TONE[s.status] || "accent") }, bar(i / n)) : null,
+    n || s.step_text ? h("div", { class: "step" }, n ? `step ${i}/${n}` : "step", s.step_text ? " · " + s.step_text : "",
+      s.status === "working" ? h("span", { class: "cursor", "aria-hidden": "true" }) : null) : null,
+    n ? h("div", null, cellBar(i / n, progCell)) : null,
     s.reality ? h("div", { class: "reality" }, h("span", { class: "reality-label" }, "reality"), s.reality) : null,
     s.recent && s.recent.length
-      ? h("ul", { class: "tools" }, s.recent.map((c) =>
-          h("li", { class: "tool tool-" + c.state, title: c.tool + " " + c.summary },
+      ? h("ul", { class: "tools" }, s.recent.map((c, k) =>
+          h("li", { class: "tool tool-" + c.state + (k === 0 && fresh ? " flash" : ""), title: c.tool + " " + c.summary },
             "› ", h("span", { class: "tool-name" }, c.tool), " ", c.summary, " ", h("span", { class: "mark" }, mark(c.state)))))
       : null,
     ctxGauge(s),

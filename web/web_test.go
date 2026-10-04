@@ -32,9 +32,20 @@ func TestNoInnerHTML(t *testing.T) {
 
 func TestThemeTokens(t *testing.T) {
 	css, _ := os.ReadFile("theme.css")
-	for _, tok := range []string{"--bg: #0B0605", "--panel: #110908", "--border: #3A1A16", "--text: #F1DCD6", "--muted: #B9928A", "--accent: #FF5A4A", "--warn: #FFB27A", "--hot: #6E2A20"} {
+	for _, tok := range []string{"--bg: #0B0605", "--panel: #110908", "--border: #3A1A16", "--text: #F1DCD6", "--muted: #B9928A", "--accent: #FF5A4A", "--warn: #FFB27A", "--hot: #6E2A20",
+		"--ok: #5CFF9D", "--yellow: #FFD66B", "--red: #FF4A3D", "--work: #F1DCD6"} {
 		if !strings.Contains(string(css), tok) {
 			t.Errorf("theme.css missing token %q", tok)
+		}
+	}
+}
+
+// Bars are drawn per cell so each cell can carry its own colour.
+func TestPerCellBars(t *testing.T) {
+	js, _ := os.ReadFile("app.js")
+	for _, fn := range []string{"function cellBar(", "progCell", "ctxCell", "useCell"} {
+		if !strings.Contains(string(js), fn) {
+			t.Errorf("app.js lacks %s", fn)
 		}
 	}
 }

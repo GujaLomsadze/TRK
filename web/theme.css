@@ -16,6 +16,11 @@
   --hot: #6E2A20;
   --done: #7A5650;
   --track: #2A1411;
+  --ok: #5CFF9D;      /* done / finished end of progress / context headroom */
+  --yellow: #FFD66B;  /* context 40–59%, usage 50–79% */
+  --red: #FF4A3D;     /* context ≥60%, usage ≥80%, BLOCKED */
+  --work: #F1DCD6;    /* WORKING: ice white */
+  --cell-off: #7A5650;
   --chip-accent-bg: rgba(255,90,74,0.10);
   --chip-accent-fg: #FF7A6B;
   --chip-warn-bg: rgba(255,178,122,0.10);
@@ -80,6 +85,9 @@ ul { list-style: none; margin: 0; padding: 0; }
 .step { color: var(--muted); overflow-wrap: anywhere; }
 .chip { font: 19px/1 var(--font-deco); text-transform: uppercase; padding: 4px 8px; border-radius: 0; white-space: nowrap; text-shadow: var(--glow); }
 .chip-accent { background: var(--chip-accent-bg); color: var(--chip-accent-fg); }
+.chip-work { background: rgba(241,220,214,0.08); color: var(--work); text-shadow: 0 0 8px rgba(241,220,214,0.55); }
+.chip-ok { background: rgba(92,255,157,0.10); color: var(--ok); text-shadow: 0 0 8px rgba(92,255,157,0.7); }
+.chip-red { background: rgba(255,74,61,0.12); color: var(--red); text-shadow: 0 0 8px rgba(255,74,61,0.75); }
 .chip-warn { background: var(--chip-warn-bg); color: var(--chip-warn-fg); }
 .chip-done { background: transparent; color: var(--chip-done-fg); border: 1px solid var(--rule-soft); text-shadow: none; }
 .ascii { font: 19px/1 var(--font-deco); text-shadow: var(--glow); white-space: pre; }
@@ -94,14 +102,52 @@ ul { list-style: none; margin: 0; padding: 0; }
 .tool-fail .mark { color: var(--accent); }
 .tool-ok .mark { color: var(--chip-accent-fg); }
 
-/* context gauge + hints (user thresholds: 40 yellow, 60 red, hints at 50/70) */
-.ctx { border-top: 1px solid var(--rule-soft); padding-top: 6px; }
-.ctx-line { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12px; }
-.ctx-hint { font-size: 12px; margin-top: 2px; }
-.ctx-ok .ctx-bar, .ctx-none .ctx-bar { color: var(--muted); text-shadow: none; }
-.ctx-yellow .ctx-line, .ctx-yellow .ctx-bar, .ctx-yellow .ctx-hint { color: var(--warn); }
-.ctx-red .ctx-line, .ctx-red .ctx-bar, .ctx-red .ctx-hint { color: var(--accent); }
-.ctx-red .ctx-hint { font-weight: 600; }
+/* context gauge + hints (user bands: 40 yellow, 60 red, hints at 50/70) */
+.ctx { border-top: 1px solid var(--rule-soft); padding-top: 6px; display: grid; gap: 2px; }
+.ctx-line { font-size: 12px; color: var(--muted); }
+.ctx-hint { font-size: 12px; font-weight: 600; }
+.ctx-ok .ctx-line { color: var(--ok); }
+.ctx-yellow .ctx-line, .ctx-yellow .ctx-hint { color: var(--yellow); }
+.ctx-red .ctx-line, .ctx-red .ctx-hint { color: var(--red); }
+
+/* per-cell ASCII bars: each cell carries its own colour + glow (set inline) */
+.cellbar { font: 19px/1 var(--font-deco); white-space: pre; }
+.cellbar .off { color: var(--cell-off); }
+.card .cellbar.small { font-size: 16px; }
+
+/* status motion — replaces notifications */
+.card.st-done { border-color: rgba(92,255,157,0.45); animation: bloom 1.6s ease-out 1, breathe 4s ease-in-out 1.6s infinite; }
+.card.st-done .chip-ok { animation: chipglow 4s ease-in-out infinite; }
+@keyframes bloom {
+  0% { box-shadow: 0 0 0 0 rgba(92,255,157,0); }
+  18% { box-shadow: 0 0 0 2px rgba(92,255,157,0.9), 0 0 42px 6px rgba(92,255,157,0.55); }
+  100% { box-shadow: 0 0 0 1px rgba(92,255,157,0.35), 0 0 16px rgba(92,255,157,0.18); }
+}
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(92,255,157,0.30), 0 0 12px rgba(92,255,157,0.12); }
+  50% { box-shadow: 0 0 0 1px rgba(92,255,157,0.55), 0 0 26px rgba(92,255,157,0.28); }
+}
+@keyframes chipglow { 50% { text-shadow: 0 0 14px rgba(92,255,157,1); } }
+.card.st-waiting { animation: heartbeat 1.8s ease-in-out infinite; }
+@keyframes heartbeat {
+  0%, 40%, 100% { box-shadow: 0 0 0 1px rgba(255,178,122,0.25); }
+  10% { box-shadow: 0 0 0 2px rgba(255,178,122,0.9), 0 0 24px rgba(255,178,122,0.45); }
+  25% { box-shadow: 0 0 0 2px rgba(255,178,122,0.7), 0 0 18px rgba(255,178,122,0.35); }
+}
+.card.st-blocked { border-color: rgba(255,74,61,0.55); box-shadow: 0 0 0 1px rgba(255,74,61,0.25), 0 0 14px rgba(255,74,61,0.15); }
+.card.st-blocked .chip { animation: blink 1.2s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0.25; } }
+.card { position: relative; overflow: hidden; }
+.card.st-looping::after { content: ""; position: absolute; left: 0; right: 0; height: 40%; top: -40%; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgba(255,178,122,0.12), transparent); animation: sweep 2.4s linear infinite; }
+@keyframes sweep { to { top: 100%; } }
+.card.st-looping .chip { animation: jitter 2.4s infinite; }
+@keyframes jitter { 0%, 92%, 100% { transform: none; } 94% { transform: translateX(-1px); } 96% { transform: translateX(1px); } }
+.cursor { display: inline-block; width: 0.6em; height: 1em; background: var(--work); vertical-align: -2px; margin-left: 4px;
+  box-shadow: 0 0 6px rgba(241,220,214,0.6); animation: blink 1s steps(1) infinite; }
+.tool.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { 0% { color: var(--bg); background: var(--work); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { *, *::after { animation: none !important; transition: none !important; } }
 
 .card-foot { display: flex; gap: 16px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--rule-soft); padding-top: 6px; flex-wrap: wrap; }
 
