@@ -1,1 +1,38 @@
-<!doctype html><meta charset="utf-8"><title>TRK.EXE</title><p>TRK.EXE</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRK.EXE</title>
+<link rel="stylesheet" href="theme.css">
+</head>
+<body>
+<header class="hdr panel">
+  <div class="brand">
+    <h1 class="title">TRK.EXE</h1>
+    <div class="sub">fleet monitor · <span id="host"></span> <span id="conn" class="conn">○ connecting</span></div>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="limits" id="limits"></div>
+  <nav class="nav" aria-label="views">
+    <a class="btn btn-secondary active" href="#">Fleet</a>
+    <span class="btn btn-secondary disabled" title="coming later">Timeline</span>
+    <span class="btn btn-secondary disabled" title="coming later">Orbit</span>
+  </nav>
+</header>
+<main class="layout">
+  <section class="grid" id="grid" aria-label="agents"></section>
+  <aside class="side">
+    <section class="panel box"><h2>Needs you</h2><ul class="list" id="needs"></ul></section>
+    <section class="panel box"><h2>Collisions</h2><ul class="list" id="collisions"></ul></section>
+  </aside>
+</main>
+<section class="panel box timeline">
+  <h2>Last 30 minutes</h2>
+  <div class="tl-scroll" id="tl-scroll"><div id="timeline"></div></div>
+  <div class="tl-legend"><span class="tl-key tl-read"></span>read <span class="tl-key tl-edit"></span>edit <span class="tl-key tl-run"></span>run <span class="tl-key tl-wait"></span>waiting on you</div>
+</section>
+<div class="scanlines" aria-hidden="true"></div>
+<script src="app.js"></script>
+</body>
+</html>

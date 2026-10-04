@@ -1,0 +1,40 @@
+package web
+
+import (
+	"io/fs"
+	"os"
+	"regexp"
+	"strings"
+	"testing"
+)
+
+func TestAssetsEmbedded(t *testing.T) {
+	for _, p := range []string{"index.html", "app.js", "theme.css", "fonts/VT323-Regular.ttf", "fonts/IBMPlexMono-Regular.ttf", "fonts/IBMPlexMono-SemiBold.ttf"} {
+		if _, err := fs.Stat(FS, p); err != nil {
+			t.Errorf("missing %s: %v", p, err)
+		}
+	}
+	idx, _ := fs.ReadFile(FS, "index.html")
+	for _, ref := range []string{"theme.css", "app.js", "TRK.EXE"} {
+		if !strings.Contains(string(idx), ref) {
+			t.Errorf("index.html lacks %s", ref)
+		}
+	}
+}
+
+// Agent-supplied text must never be parsed as HTML.
+func TestNoInnerHTML(t *testing.T) {
+	js, _ := os.ReadFile("app.js")
+	if regexp.MustCompile(`innerHTML|outerHTML|insertAdjacentHTML|document\.write`).Match(js) {
+		t.Fatal("app.js uses an HTML-parsing sink")
+	}
+}
+
+func TestThemeTokens(t *testing.T) {
+	css, _ := os.ReadFile("theme.css")
+	for _, tok := range []string{"--bg: #0B0605", "--panel: #110908", "--border: #3A1A16", "--text: #F1DCD6", "--muted: #B9928A", "--accent: #FF5A4A", "--warn: #FFB27A", "--hot: #6E2A20"} {
+		if !strings.Contains(string(css), tok) {
+			t.Errorf("theme.css missing token %q", tok)
+		}
+	}
+}
