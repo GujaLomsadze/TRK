@@ -118,7 +118,7 @@ const WIDGETS = {
 const FOOTER_STATS = { elapsed: "Elapsed", tokens: "Tokens", cost: "Cost", model: "Model", last: "Last activity", calls: "Tool calls" };
 const AREAS = { needs: "Needs you", collisions: "Collisions", timeline: "Timeline (bottom)", limits: "Plan usage (header)" };
 const PRESETS = {
-  Default: { order: ["task", "progress", "step", "reality", "tools", "model", "files", "ctx"], on: ["task", "progress", "step", "reality", "files", "ctx"], tools: 3, hints: true, reserve: false, footer: ["elapsed", "cost", "model", "last"] },
+  Default: { order: ["task", "progress", "step", "reality", "prompt", "reply", "lines", "busy", "subagents", "ctx", "tools", "model", "files"], on: ["task", "progress", "step", "reality", "prompt", "reply", "lines", "busy", "subagents", "ctx"], tools: 3, hints: true, reserve: false, footer: ["elapsed", "cost", "model", "last"] },
   Compact: { on: ["task", "progress", "ctx"], tools: 1, hints: false, reserve: false, footer: ["elapsed", "cost"] },
   Detailed: { on: ["task", "step", "progress", "reality", "tools", "ctx", "model", "files", "prompt", "reply", "lines", "busy", "subagents"], tools: 5, hints: true, reserve: true, footer: ["elapsed", "tokens", "cost", "last"] },
   "Context watch": { on: ["ctx", "task", "progress"], tools: 3, hints: true, reserve: false, footer: ["tokens", "cost"] },
@@ -195,13 +195,16 @@ const mark = (st) => (st === "ok" ? "✓" : st === "fail" ? "✗" : "…");
 // Each widget renders into a slot with a reserved height, so every card has the same shape.
 const RENDER = {
   task: (s) => h("p", { class: "slot-task" + (s.task ? "" : " muted"), title: s.task || "" }, s.task || "no task declared"),
+  // "step i/N" sits beside the progress bar; it falls back to this line when the bar is hidden
   step: (s) => {
-    const n = s.step_n || 0;
+    const n = s.step_n || 0, bar = layout.slots.some((x) => x.id === "progress" && x.on);
+    const count = bar ? "" : n ? `step ${s.step_i || 0}/${n}` : "step " + DASH;
     return h("div", { class: "slot-step one", title: s.step_text || "" },
-      n ? `step ${s.step_i || 0}/${n}` : "step " + DASH, s.step_text ? " · " + s.step_text : "",
+      count, count && s.step_text ? " · " : "", s.step_text || (count ? "" : "\u00a0"),
       s.status === "working" ? h("span", { class: "cursor", "aria-hidden": "true" }) : null);
   },
-  progress: (s) => h("div", { class: "slot-bar" }, cellBar(s.step_n ? (s.step_i || 0) / s.step_n : 0, progCell)),
+  progress: (s) => h("div", { class: "slot-bar prog-row" }, cellBar(s.step_n ? (s.step_i || 0) / s.step_n : 0, progCell),
+    h("span", { class: "prog-count" }, s.step_n ? `step ${s.step_i || 0}/${s.step_n}` : "step " + DASH)),
   reality: (s) => (s.reality || layout.reserve)
     ? h("div", { class: "slot-reality" }, s.reality ? h("div", { class: "reality" }, h("span", { class: "reality-label" }, "reality"), s.reality) : null)
     : null,

@@ -58,14 +58,24 @@ func TestPerCellBars(t *testing.T) {
 	}
 }
 
-// The out-of-the-box card layout (picked by the user, 2026-10-04).
+// The out-of-the-box card layout (picked by the user, 2026-10-04; widgets added the same night).
 func TestDefaultLayout(t *testing.T) {
 	js, _ := os.ReadFile("app.js")
-	want := `Default: { order: ["task", "progress", "step", "reality", "tools", "model", "files", "ctx"], ` +
-		`on: ["task", "progress", "step", "reality", "files", "ctx"], tools: 3, hints: true, reserve: false, ` +
+	want := `Default: { order: ["task", "progress", "step", "reality", "prompt", "reply", "lines", "busy", "subagents", "ctx", "tools", "model", "files"], ` +
+		`on: ["task", "progress", "step", "reality", "prompt", "reply", "lines", "busy", "subagents", "ctx"], tools: 3, hints: true, reserve: false, ` +
 		`footer: ["elapsed", "cost", "model", "last"] },`
 	if !strings.Contains(string(js), want) {
 		t.Fatalf("app.js Default preset is not the chosen default:\n%s", want)
+	}
+}
+
+// "step i/N" sits to the right of the progress bar; the step line carries only the text.
+func TestStepCountBesideBar(t *testing.T) {
+	js, _ := os.ReadFile("app.js")
+	for _, w := range []string{`class: "slot-bar prog-row"`, `class: "prog-count"`} {
+		if !strings.Contains(string(js), w) {
+			t.Errorf("app.js lacks %s", w)
+		}
 	}
 }
 
