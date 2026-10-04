@@ -33,7 +33,24 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		usage(stdout)
 		return 0
 	}
-	switch args[0] {
+	cmd, rest := args[0], args[1:]
+	switch cmd {
+	case "start", "step", "progress", "blocked", "done", "hook", "statusline":
+		return safe(func() int {
+			switch cmd {
+			case "hook":
+				return hook(stdin)
+			case "statusline":
+				return statusline(rest, stdin, stdout)
+			}
+			return report(cmd, rest, stderr)
+		})
+	case "serve":
+		return serve(stdout, stderr)
+	case "open":
+		return open(stdout, stderr)
+	case "init":
+		return initCmd(rest, stdin, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintf(stdout, "trk %s\n", version.Version)
 		return 0
@@ -41,6 +58,17 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		usage(stdout)
 		return 0
 	}
-	fmt.Fprintf(stderr, "trk: unknown command %q (try `trk help`)\n", args[0])
+	fmt.Fprintf(stderr, "trk: unknown command %q (try `trk help`)\n", cmd)
 	return 2
+}
+
+// safe guarantees exit 0 for agent-facing commands, even on panic.
+func safe(f func() int) (code int) {
+	defer func() {
+		if recover() != nil {
+			code = 0
+		}
+	}()
+	f()
+	return 0
 }
