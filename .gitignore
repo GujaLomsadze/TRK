@@ -1,0 +1,7 @@
+dist/
+/trk
+/trk.exe
+*.db
+*.db-wal
+*.db-shm
+.superpowers/
