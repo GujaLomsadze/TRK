@@ -154,7 +154,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 @keyframes flash { 0% { color: var(--bg); background: var(--work); } 100% { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { *, *::after { animation: none !important; transition: none !important; } }
 
-.card-foot { display: flex; gap: 16px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--rule-soft); padding-top: 6px; flex-wrap: wrap; }
+.card-foot { display: flex; gap: 16px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--rule-soft); padding-top: 6px; white-space: nowrap; overflow: hidden; }
 
 /* inbox + collisions */
 .list li { border-top: 1px solid var(--rule-soft); padding: 8px 0; }
@@ -274,7 +274,12 @@ body.no-limits .limits { display: none; }
 .w-prompt .w-who { color: var(--warn); }
 .w-reply .w-who { color: var(--ok); }
 .w-who span { font: 11px var(--font-read); color: var(--cell-off); text-transform: none; letter-spacing: 0; }
-.w-txt { font-size: 13px; color: var(--text); }
+.w-txt { font-size: 13px; line-height: 1.45; color: var(--text); }
+.w-txt.clamp2 { height: 2.9em; } /* always two lines tall, so cards line up */
+/* placeholder state: same box, dimmed, so empty widgets keep the card's shape */
+.ghost { opacity: 0.45; }
+.w-prompt.ghost, .w-reply.ghost { border-style: dashed; background: transparent; }
+.ghost .w-txt, .slot-line.ghost { color: var(--muted); font-style: italic; }
 .w-lines { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 12px; }
 .w-lines-n { font: 19px/1 var(--font-deco); white-space: nowrap; }
 .w-cells { font: 13px/1 var(--font-deco); white-space: pre; overflow: hidden; }

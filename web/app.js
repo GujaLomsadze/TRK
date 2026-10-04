@@ -219,35 +219,41 @@ const RENDER = {
   ctx: (s) => ctxGauge(s),
   model: (s) => h("div", { class: "slot-line one" }, "model · ", h("span", { class: "val" }, s.model || DASH)),
   files: (s) => h("div", { class: "slot-line one" }, "files · ", h("span", { class: "val" }, `${s.files_read || 0} read · ${s.files_edited || 0} edited`), h("span", { class: "muted" }, " (30 min)")),
+  // The widgets below always render their box (dimmed placeholder when there is no
+  // data yet), so cards keep the same shape and don't jump as data arrives.
   prompt: (s) => s.last_prompt
     ? h("div", { class: "w-prompt" },
         h("div", { class: "w-who" }, "You", h("span", { class: "live-ago", "data-since": s.last_prompt_at }, dur(now() - s.last_prompt_at) + " ago")),
         h("div", { class: "w-txt clamp2", title: s.last_prompt }, s.last_prompt))
-    : null,
+    : h("div", { class: "w-prompt ghost" }, h("div", { class: "w-who" }, "You"), h("div", { class: "w-txt clamp2" }, "no prompt yet")),
   // the reply is the result: shown once the agent has stopped
-  reply: (s) => s.last_reply && (s.status === "done" || s.status === "idle")
-    ? h("div", { class: "w-reply" }, h("div", { class: "w-who" }, "Claude"), h("div", { class: "w-txt clamp2", title: s.last_reply }, s.last_reply))
-    : null,
+  reply: (s) => {
+    const stopped = s.status === "done" || s.status === "idle";
+    if (s.last_reply && stopped) {
+      return h("div", { class: "w-reply" }, h("div", { class: "w-who" }, "Claude"), h("div", { class: "w-txt clamp2", title: s.last_reply }, s.last_reply));
+    }
+    return h("div", { class: "w-reply ghost" }, h("div", { class: "w-who" }, "Claude"),
+      h("div", { class: "w-txt clamp2" }, s.status === "working" || s.status === "looping" ? "working…" : stopped ? "no reply yet" : "waiting on you"));
+  },
   lines: (s) => {
     const a = s.lines_added || 0, d = s.lines_removed || 0;
-    if (!a && !d) return null;
-    const na = Math.max(a ? 1 : 0, Math.round((a / (a + d)) * CELLS)), nd = Math.min(CELLS - na, Math.max(d ? 1 : 0, Math.round((d / (a + d)) * CELLS)));
-    return h("div", { class: "w-lines" },
+    const na = a + d ? Math.max(a ? 1 : 0, Math.round((a / (a + d)) * CELLS)) : 0;
+    const nd = a + d ? Math.min(CELLS - na, Math.max(d ? 1 : 0, Math.round((d / (a + d)) * CELLS))) : 0;
+    return h("div", { class: "w-lines" + (a || d ? "" : " ghost") },
       h("span", { class: "w-lines-n" }, h("span", { class: "w-add" }, "+" + tokens(a)), " ", h("span", { class: "w-del" }, "−" + tokens(d))),
       h("span", { class: "w-cells", "aria-hidden": "true" }, "[", h("span", { class: "w-add" }, "█".repeat(na)), h("span", { class: "w-del" }, "█".repeat(nd)),
         h("span", { class: "off" }, "░".repeat(CELLS - na - nd)), "]"));
   },
   busy: (s) => {
-    if (!s.wall_ms) return null;
-    const b = Math.round(Math.min(1, (s.api_ms || 0) / s.wall_ms) * 100);
-    return h("div", { class: "w-busy", title: `model working ${dur(s.api_ms || 0)} of ${dur(s.wall_ms)}` },
+    const b = s.wall_ms ? Math.round(Math.min(1, (s.api_ms || 0) / s.wall_ms) * 100) : 0;
+    return h("div", { class: "w-busy" + (s.wall_ms ? "" : " ghost"), title: s.wall_ms ? `model working ${dur(s.api_ms || 0)} of ${dur(s.wall_ms)}` : "" },
       h("div", { class: "w-split" }, h("div", { class: "w-model", style: `width:${b}%` }), h("div", { class: "w-rest", style: `width:${100 - b}%` })),
-      h("div", { class: "w-legend" }, h("span", null, h("i", { class: "w-model" }), "model " + b + "%"), h("span", null, h("i", { class: "w-rest" }), "tools / you " + (100 - b) + "%")));
+      h("div", { class: "w-legend" }, h("span", null, h("i", { class: "w-model" }), "model " + (s.wall_ms ? b + "%" : DASH)), h("span", null, h("i", { class: "w-rest" }), "tools / you " + (s.wall_ms ? 100 - b + "%" : DASH))));
   },
   subagents: (s) => {
     const types = Object.entries(s.subagents || {}).sort((x, y) => y[1] - x[1]);
     const n = types.reduce((sum, [, c]) => sum + c, 0), bg = s.bg_running || 0;
-    if (!n && !bg) return null;
+    if (!n && !bg) return h("div", { class: "slot-line one ghost" }, "▸ no subagents");
     const full = [n ? `${n} subagent${n === 1 ? "" : "s"}: ` + types.map(([t, c]) => t + " ×" + c).join(", ") : "", bg ? bg + " in background" : ""].filter(Boolean).join(" · ");
     return h("div", { class: "slot-line one", title: full }, "▸ ",
       n ? [h("span", { class: "val" }, n + (n === 1 ? " subagent" : " subagents")), " · ", types.map(([t, c]) => t + (c > 1 ? " ×" + c : "")).join(", ")] : null,
