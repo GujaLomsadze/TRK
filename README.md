@@ -176,3 +176,7 @@ make clean         # remove bin/, dist/ and dev data
 ```
 
 The dashboard (`web/`) is embedded in the binary, so restart the daemon after changing it (`make stop demo`).
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).
