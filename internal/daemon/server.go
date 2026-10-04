@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -44,6 +45,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/events", s.postEvent)
 	mux.HandleFunc("GET /v1/sessions", s.getSessions)
 	mux.HandleFunc("GET /v1/sessions/{id}", s.getSession)
+	mux.HandleFunc("POST /v1/sessions/{id}/dismiss", s.dismiss)
+	mux.HandleFunc("POST /v1/settings", s.settings)
 	mux.HandleFunc("GET /v1/account", s.getAccount)
 	mux.HandleFunc("GET /v1/stream", s.stream)
 	mux.HandleFunc("GET /healthz", s.healthz)
@@ -140,6 +143,47 @@ func (s *Server) getSession(w http.ResponseWriter, r *http.Request) {
 		evs = []model.Event{}
 	}
 	writeJSON(w, map[string]any{"session": sv, "events": evs})
+}
+
+func (s *Server) dismiss(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	switch err := s.fl.Dismiss(id, s.now()); err {
+	case nil:
+	case fleet.ErrNotFound:
+		http.NotFound(w, r)
+		return
+	default:
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	if row, ok := s.fl.SessionRow(id); ok {
+		if err := s.st.UpsertSession(row); err != nil {
+			s.log.Printf("persist dismiss: %v", err)
+		}
+	}
+	s.dirty.Store(true)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// maxHideAfterMin caps the auto-hide setting at 30 days.
+const maxHideAfterMin = 30 * 24 * 60
+
+func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		HideAfterMin *int `json:"hide_after_min"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil || body.HideAfterMin == nil ||
+		*body.HideAfterMin < 0 || *body.HideAfterMin > maxHideAfterMin {
+		http.Error(w, "want {\"hide_after_min\": 0..43200} (0 = never)", http.StatusBadRequest)
+		return
+	}
+	m := *body.HideAfterMin
+	s.fl.SetHideAfter(int64(m) * 60000)
+	if err := s.st.SetSetting("hide_after_min", strconv.Itoa(m)); err != nil {
+		s.log.Printf("save setting: %v", err)
+	}
+	s.dirty.Store(true)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) getAccount(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.fl.Account()) }

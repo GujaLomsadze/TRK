@@ -247,6 +247,15 @@ body.no-limits .limits { display: none; }
 .stopped-box p { margin: 0; color: var(--muted); }
 .stopped-box code { font: 19px var(--font-deco); color: var(--work); border: 1px solid var(--border); padding: 6px 10px; justify-self: start; }
 
+/* ✕ on idle/done cards */
+.head-right { display: flex; align-items: flex-start; gap: 6px; flex: none; }
+.dismiss { background: transparent; border: 1px solid var(--rule-soft); color: var(--muted); width: 28px; height: 28px;
+  cursor: pointer; font: 13px/1 var(--font-read); opacity: 0; transition: opacity 0.15s; }
+.card:hover .dismiss, .dismiss:focus-visible { opacity: 1; }
+.dismiss:hover { color: var(--text); border-color: var(--border); }
+@media (hover: none) { .dismiss { opacity: 1; } }
+.ed-select { background: var(--panel); color: var(--text); border: 1px solid var(--border); font: 13px var(--font-read); padding: 6px 8px; justify-self: start; min-height: 36px; }
+
 .scanlines { position: fixed; inset: 0; pointer-events: none; z-index: 10;
   background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,0.16) 3px, transparent 4px); }
 .icon-btn { min-width: 44px; justify-content: center; padding: 0 10px; font-size: 22px; }

@@ -212,7 +212,11 @@ function card(s) {
   return h("article", { class: "panel card st-" + s.status + (s.attention ? " attention" : "") },
     h("div", { class: "card-head" },
       h("div", { class: "head-text" }, h("h3", { class: "card-name one", title: s.name }, s.name), h("div", { class: "meta one", title: where }, where || DASH)),
-      h("span", { class: "chip chip-" + tone }, label)),
+      h("div", { class: "head-right" },
+        h("span", { class: "chip chip-" + tone }, label),
+        s.status === "idle" || s.status === "done"
+          ? h("button", { class: "dismiss", type: "button", "data-dismiss": s.session_id, "aria-label": "Hide " + s.name, title: "Hide this card (it comes back if the session gets busy again)" }, "✕")
+          : null)),
     layout.slots.filter((x) => x.on).map((x) => RENDER[x.id](s, fresh)),
     layout.footer.length ? h("footer", { class: "card-foot" }, layout.footer.map((k) => FOOT[k](s))) : null);
 }
@@ -310,6 +314,15 @@ function setConn(live) {
   el.textContent = live ? "● live" : stopped ? "■ stopped" : "○ reconnecting";
   el.classList.toggle("live", live);
 }
+
+// ✕ on idle/done cards: the daemon hides the session until it shows new activity.
+$("grid").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-dismiss]");
+  if (!b) return;
+  b.disabled = true;
+  try { await fetch("/v1/sessions/" + encodeURIComponent(b.dataset.dismiss) + "/dismiss", { method: "POST" }); }
+  catch { b.disabled = false; }
+});
 
 let stopped = false;
 $("power").addEventListener("click", async () => {

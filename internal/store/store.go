@@ -33,7 +33,9 @@ CREATE TABLE sessions(
 CREATE TABLE account(
   id INTEGER PRIMARY KEY CHECK (id = 1),
   five_h_pct REAL, five_h_reset INTEGER, seven_d_pct REAL, seven_d_reset INTEGER, updated_at INTEGER
-);`}
+);`, `
+ALTER TABLE sessions ADD COLUMN dismissed_at INTEGER;
+CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);`}
 
 type Store struct{ db *sql.DB }
 
@@ -125,14 +127,15 @@ func (s *Store) SessionEvents(id string, limit int) ([]model.Event, error) {
 
 func (s *Store) UpsertSession(x model.Session) error {
 	_, err := s.db.Exec(`INSERT INTO sessions(session_id, name, cwd, repo, branch, model, task, step_text, step_i, step_n, status,
-  ctx_pct, ctx_size, cost_usd, tokens_in, tokens_out, started_at, last_event_at)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  ctx_pct, ctx_size, cost_usd, tokens_in, tokens_out, started_at, last_event_at, dismissed_at)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(session_id) DO UPDATE SET name=excluded.name, cwd=excluded.cwd, repo=excluded.repo, branch=excluded.branch,
   model=excluded.model, task=excluded.task, step_text=excluded.step_text, step_i=excluded.step_i, step_n=excluded.step_n,
   status=excluded.status, ctx_pct=excluded.ctx_pct, ctx_size=excluded.ctx_size, cost_usd=excluded.cost_usd,
-  tokens_in=excluded.tokens_in, tokens_out=excluded.tokens_out, started_at=excluded.started_at, last_event_at=excluded.last_event_at`,
+  tokens_in=excluded.tokens_in, tokens_out=excluded.tokens_out, started_at=excluded.started_at, last_event_at=excluded.last_event_at,
+  dismissed_at=excluded.dismissed_at`,
 		x.SessionID, x.Name, x.Cwd, x.Repo, x.Branch, x.Model, x.Task, x.StepText, x.StepI, x.StepN, x.Status,
-		x.CtxPct, x.CtxSize, x.CostUSD, x.TokensIn, x.TokensOut, x.StartedAt, x.LastEventAt)
+		x.CtxPct, x.CtxSize, x.CostUSD, x.TokensIn, x.TokensOut, x.StartedAt, x.LastEventAt, x.DismissedAt)
 	return err
 }
 
@@ -140,7 +143,7 @@ func (s *Store) Sessions() ([]model.Session, error) {
 	rows, err := s.db.Query(`SELECT session_id, coalesce(name,''), coalesce(cwd,''), coalesce(repo,''), coalesce(branch,''),
   coalesce(model,''), coalesce(task,''), coalesce(step_text,''), coalesce(step_i,0), coalesce(step_n,0), coalesce(status,''),
   ctx_pct, coalesce(ctx_size,0), coalesce(cost_usd,0), coalesce(tokens_in,0), coalesce(tokens_out,0),
-  coalesce(started_at,0), coalesce(last_event_at,0) FROM sessions`)
+  coalesce(started_at,0), coalesce(last_event_at,0), coalesce(dismissed_at,0) FROM sessions`)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +153,7 @@ func (s *Store) Sessions() ([]model.Session, error) {
 		var x model.Session
 		if err := rows.Scan(&x.SessionID, &x.Name, &x.Cwd, &x.Repo, &x.Branch, &x.Model, &x.Task, &x.StepText,
 			&x.StepI, &x.StepN, &x.Status, &x.CtxPct, &x.CtxSize, &x.CostUSD, &x.TokensIn, &x.TokensOut,
-			&x.StartedAt, &x.LastEventAt); err != nil {
+			&x.StartedAt, &x.LastEventAt, &x.DismissedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, x)
@@ -174,4 +177,19 @@ func (s *Store) Account() (model.Account, error) {
 		return model.Account{}, nil
 	}
 	return a, err
+}
+
+// Setting reads one daemon setting; ok is false when it was never set.
+func (s *Store) Setting(key string) (string, bool, error) {
+	var v string
+	err := s.db.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&v)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	return v, err == nil, err
+}
+
+func (s *Store) SetSetting(key, value string) error {
+	_, err := s.db.Exec(`INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
+	return err
 }

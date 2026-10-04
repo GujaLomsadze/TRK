@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	hideAfter     = 12 * 3600 * 1000
 	timelineSpan  = 30 * 60 * 1000
 	staleProgress = 15 * 60 * 1000
 	staleCalls    = 25
@@ -70,16 +69,18 @@ type View struct {
 	Collisions []CollisionView `json:"collisions"`
 	Account    model.Account   `json:"account"`
 	Stats      Stats           `json:"stats"`
+	// HideAfterMin is the auto-hide setting in minutes (0 = never), shown in the layout drawer.
+	HideAfterMin int `json:"hide_after_min"`
 }
 
 func (f *Fleet) View(now int64) View {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	v := View{Now: now, Account: f.account, Sessions: []SessionView{}, Needs: []NeedItem{}, Collisions: []CollisionView{}}
+	v := View{Now: now, Account: f.account, Sessions: []SessionView{}, Needs: []NeedItem{}, Collisions: []CollisionView{}, HideAfterMin: int(f.hideAfter / 60000)}
 	var touches []derive.FileTouch
 	for _, e := range f.sessions {
 		sv := buildView(e, now)
-		if (sv.Status == derive.StatusDone || sv.Status == derive.StatusIdle) && now-sv.LastEventAt > hideAfter {
+		if f.hidden(e, sv.Status, now) {
 			continue
 		}
 		v.Sessions = append(v.Sessions, sv)
@@ -127,6 +128,20 @@ func (f *Fleet) View(now int64) View {
 		v.Collisions = append(v.Collisions, cv)
 	}
 	return v
+}
+
+// hidden: dismissed with no activity since, or idle/done longer than the auto-hide setting.
+// Activity (not LastEventAt) is the clock: status-line refreshes keep arriving for idle sessions.
+func (f *Fleet) hidden(e *entry, status string, now int64) bool {
+	last := e.T.LastActivity
+	if last == 0 {
+		last = e.S.StartedAt
+	}
+	if e.S.DismissedAt > 0 && e.S.DismissedAt >= last {
+		return true
+	}
+	quiet := status == derive.StatusDone || status == derive.StatusIdle
+	return quiet && f.hideAfter > 0 && now-last > f.hideAfter
 }
 
 func (f *Fleet) SessionView(id string, now int64) (SessionView, bool) {

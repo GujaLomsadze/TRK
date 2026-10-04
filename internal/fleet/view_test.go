@@ -101,3 +101,51 @@ func TestViewCountsFilesAndCalls(t *testing.T) {
 		t.Fatalf("calls=%d read=%d edited=%d", s.ToolCalls, s.FilesRead, s.FilesEdited)
 	}
 }
+
+func TestAutoHideIdleAndDone(t *testing.T) {
+	f := newFleet()
+	now := 100 * 3600 * sec
+	ingest(t, f, hook("old", "PreToolUse", "/r/a", `,"tool_name":"Bash","tool_input":{"command":"ls"}`), now-6*3600*sec)   // idle 6h
+	ingest(t, f, hook("fresh", "PreToolUse", "/r/b", `,"tool_name":"Bash","tool_input":{"command":"ls"}`), now-1*3600*sec) // idle 1h
+	f.SetHideAfter(5 * 3600 * sec)
+	if got := ids(f.View(now).Sessions); len(got) != 1 || got[0] != "fresh" {
+		t.Fatalf("5h: %v", got)
+	}
+	f.SetHideAfter(0) // never
+	if got := ids(f.View(now).Sessions); len(got) != 2 {
+		t.Fatalf("never: %v", got)
+	}
+	if f.View(now).HideAfterMin != 0 {
+		t.Fatal("view should report the setting")
+	}
+}
+
+func TestDismissAndReturnOnActivity(t *testing.T) {
+	f := newFleet()
+	now := 1000 * sec
+	ingest(t, f, hook("A", "SessionStart", "/r/a", ""), now)
+	ingest(t, f, hook("A", "Stop", "/r/a", ""), now+sec) // done
+	ingest(t, f, hook("W", "PreToolUse", "/r/w", `,"tool_name":"Bash","tool_input":{"command":"ls"}`), now+sec)
+	if err := f.Dismiss("W", now+2*sec); err != ErrActive {
+		t.Fatalf("dismissing a working session: %v", err)
+	}
+	if err := f.Dismiss("nope", now+2*sec); err != ErrNotFound {
+		t.Fatalf("unknown session: %v", err)
+	}
+	if err := f.Dismiss("A", now+2*sec); err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(f.View(now + 3*sec).Sessions); len(got) != 1 || got[0] != "W" {
+		t.Fatalf("after dismiss: %v", got)
+	}
+	// status-line refreshes are not activity: stays hidden
+	ingest(t, f, model.Envelope{Source: "statusline", Payload: []byte(`{"session_id":"A","context_window":{"used_percentage":12}}`)}, now+4*sec)
+	if got := ids(f.View(now + 5*sec).Sessions); len(got) != 1 {
+		t.Fatalf("status refresh revived it: %v", got)
+	}
+	// a new prompt is: it comes back
+	ingest(t, f, hook("A", "UserPromptSubmit", "/r/a", `,"user_prompt":"more"`), now+6*sec)
+	if got := ids(f.View(now + 7*sec).Sessions); len(got) != 2 {
+		t.Fatalf("new activity should bring it back: %v", got)
+	}
+}

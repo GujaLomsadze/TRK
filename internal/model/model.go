@@ -43,6 +43,7 @@ type Session struct {
 	TokensOut   int64    `json:"tokens_out"`
 	StartedAt   int64    `json:"started_at"`
 	LastEventAt int64    `json:"last_event_at"`
+	DismissedAt int64    `json:"-"` // ✕ on the card; hidden until new activity after this time
 }
 
 // Account is the latest plan-limit snapshot. Resets are unix ms.

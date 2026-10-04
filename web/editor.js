@@ -10,6 +10,7 @@
     model: "Model the session runs", files: "Files read / edited, last 30 min",
   };
   let dragFrom = null;
+  const HIDE_OPTS = [[60, "1 hour"], [300, "5 hours"], [720, "12 hours"], [1440, "24 hours"], [0, "Never"]];
 
   const clone = () => JSON.parse(JSON.stringify(layout));
   const update = (fn) => { const next = clone(); fn(next); next.preset = matchPreset(next); setLayout(next); draw(); };
@@ -62,6 +63,10 @@
         h("p", { class: "meta" }, "Drag ⠿ or use the arrows to reorder. The card header and footer stay pinned.")),
       h("section", { class: "ed-group" }, h("h3", null, "Footer stats ", h("span", { class: "meta" }, `${layout.footer.length}/4`)),
         h("div", { class: "ed-row" }, Object.entries(FOOTER_STATS).map(([k, label]) => toggle("foot:" + k, label, layout.footer.includes(k))))),
+      h("section", { class: "ed-group" }, h("h3", null, "Hide idle & done cards after"),
+        h("select", { id: "opt-hide", class: "ed-select" }, HIDE_OPTS.map(([m, label]) =>
+          h("option", { value: m, selected: m === (view ? view.hide_after_min : 300) ? "" : null }, label))),
+        h("p", { class: "meta" }, "Applies to every browser. A hidden card comes back as soon as its session gets busy again; ✕ on a card hides it right away.")),
       h("section", { class: "ed-group" }, h("h3", null, "Dashboard areas"),
         h("div", { class: "ed-row" }, Object.entries(AREAS).map(([k, label]) => toggle("area:" + k, label, layout.areas[k])))));
   }
@@ -86,6 +91,10 @@
     else if (t.id === "opt-tools") update((l) => { l.tools = Number(t.value); });
     else if (t.id === "opt-hints") update((l) => { l.hints = t.checked; });
     else if (t.id === "opt-reserve") update((l) => { l.reserve = t.checked; });
+    else if (t.id === "opt-hide") {
+      fetch("/v1/settings", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hide_after_min: Number(t.value) }) }).catch(() => {});
+    }
   });
 
   $("layout-open").addEventListener("click", () => { draw(); dlg.showModal(); });

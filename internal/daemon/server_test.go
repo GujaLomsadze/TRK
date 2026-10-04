@@ -222,3 +222,53 @@ func TestStopEndpoint(t *testing.T) {
 		t.Fatal("OnStop not called")
 	}
 }
+
+func TestDismissEndpoint(t *testing.T) {
+	ts, _ := newTestServer(t)
+	post(t, ts.URL, `{"source":"hook","payload":{"session_id":"D","hook_event_name":"Stop","cwd":"/tmp/d"}}`, nil)
+	post(t, ts.URL, `{"source":"hook","payload":{"session_id":"W","hook_event_name":"PreToolUse","cwd":"/tmp/w","tool_name":"Bash","tool_input":{"command":"ls"}}}`, nil)
+	code := func(id string) int {
+		resp, err := http.Post(ts.URL+"/v1/sessions/"+id+"/dismiss", "application/json", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if c := code("W"); c != http.StatusConflict {
+		t.Fatalf("working session dismiss = %d", c)
+	}
+	if c := code("nope"); c != http.StatusNotFound {
+		t.Fatalf("unknown = %d", c)
+	}
+	if c := code("D"); c != http.StatusNoContent {
+		t.Fatalf("done session dismiss = %d", c)
+	}
+	var v fleet.View
+	getJSON(t, ts.URL+"/v1/sessions", &v)
+	if len(v.Sessions) != 1 || v.Sessions[0].SessionID != "W" {
+		t.Fatalf("after dismiss: %+v", v.Sessions)
+	}
+}
+
+func TestSettingsEndpoint(t *testing.T) {
+	ts, s := newTestServer(t)
+	resp, _ := http.Post(ts.URL+"/v1/settings", "application/json", strings.NewReader(`{"hide_after_min":60}`))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("settings = %d", resp.StatusCode)
+	}
+	var v fleet.View
+	getJSON(t, ts.URL+"/v1/sessions", &v)
+	if v.HideAfterMin != 60 {
+		t.Fatalf("hide_after_min = %d", v.HideAfterMin)
+	}
+	if val, ok, _ := s.st.Setting("hide_after_min"); !ok || val != "60" {
+		t.Fatalf("not persisted: %q %v", val, ok)
+	}
+	for _, bad := range []string{`{"hide_after_min":-5}`, `{"hide_after_min":"x"}`, `nope`} {
+		resp, _ := http.Post(ts.URL+"/v1/settings", "application/json", strings.NewReader(bad))
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s → %d, want 400", bad, resp.StatusCode)
+		}
+	}
+}

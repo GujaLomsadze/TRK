@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -87,5 +88,55 @@ func TestAccount(t *testing.T) {
 	a, _ = s.Account()
 	if a.FiveHPct == nil || *a.FiveHPct != 23 || a.SevenDPct != nil || a.FiveHReset != 99 {
 		t.Fatalf("account = %+v", a)
+	}
+}
+
+func TestDismissedAtAndSettingsPersist(t *testing.T) {
+	s, p := open(t)
+	if err := s.UpsertSession(model.Session{SessionID: "a", DismissedAt: 42}); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok, err := s.Setting("hide_after_ms"); err != nil || ok || v != "" {
+		t.Fatalf("unset setting = %q %v %v", v, ok, err)
+	}
+	if err := s.SetSetting("hide_after_ms", "18000000"); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s2, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	all, _ := s2.Sessions()
+	if len(all) != 1 || all[0].DismissedAt != 42 {
+		t.Fatalf("sessions = %+v", all)
+	}
+	if v, ok, _ := s2.Setting("hide_after_ms"); !ok || v != "18000000" {
+		t.Fatalf("setting = %q %v", v, ok)
+	}
+}
+
+// A database created by v0.1.x (schema 1) must upgrade in place, keeping its rows.
+func TestUpgradeFromSchema1(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(migrations[0]); err != nil {
+		t.Fatal(err)
+	}
+	db.Exec(`PRAGMA user_version = 1`)
+	db.Exec(`INSERT INTO sessions(session_id, name) VALUES('old', 'kept')`)
+	db.Close()
+	s, err := Open(p)
+	if err != nil {
+		t.Fatalf("upgrade: %v", err)
+	}
+	defer s.Close()
+	all, err := s.Sessions()
+	if err != nil || len(all) != 1 || all[0].Name != "kept" || all[0].DismissedAt != 0 {
+		t.Fatalf("after upgrade: %+v %v", all, err)
 	}
 }

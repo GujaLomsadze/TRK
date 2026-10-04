@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"hash/fnv"
 	"path/filepath"
 	"strings"
@@ -33,17 +34,26 @@ type gitCached struct {
 	at   int64
 }
 
+// DefaultHideAfter: idle/done cards leave the dashboard after this long without activity.
+const DefaultHideAfter int64 = 5 * 3600 * 1000
+
+var (
+	ErrNotFound = errors.New("no such session")
+	ErrActive   = errors.New("only idle or done sessions can be dismissed")
+)
+
 type Fleet struct {
-	mu       sync.Mutex
-	sessions map[string]*entry
-	pids     map[int]string // claude PID → session_id
-	account  model.Account
-	git      GitLookup
-	gitCache map[string]gitCached
+	mu        sync.Mutex
+	hideAfter int64 // ms; 0 = never auto-hide
+	sessions  map[string]*entry
+	pids      map[int]string // claude PID → session_id
+	account   model.Account
+	git       GitLookup
+	gitCache  map[string]gitCached
 }
 
 func New(git GitLookup) *Fleet {
-	return &Fleet{sessions: map[string]*entry{}, pids: map[int]string{}, git: git, gitCache: map[string]gitCached{}}
+	return &Fleet{sessions: map[string]*entry{}, pids: map[int]string{}, git: git, gitCache: map[string]gitCached{}, hideAfter: DefaultHideAfter}
 }
 
 func (f *Fleet) Restore(sessions []model.Session, acct model.Account) {
@@ -53,6 +63,47 @@ func (f *Fleet) Restore(sessions []model.Session, acct model.Account) {
 		f.sessions[s.SessionID] = &entry{S: s}
 	}
 	f.account = acct
+}
+
+func (f *Fleet) SetHideAfter(ms int64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if ms < 0 {
+		ms = 0
+	}
+	f.hideAfter = ms
+}
+
+func (f *Fleet) HideAfter() int64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.hideAfter
+}
+
+// Dismiss hides an idle or done session until it shows new activity.
+func (f *Fleet) Dismiss(id string, now int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	e, ok := f.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if st, _ := derive.Status(&e.T, now); st != derive.StatusIdle && st != derive.StatusDone {
+		return ErrActive
+	}
+	e.S.DismissedAt = now
+	return nil
+}
+
+// SessionRow returns the stored row for a session (e.g. to persist it after Dismiss).
+func (f *Fleet) SessionRow(id string) (model.Session, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	e, ok := f.sessions[id]
+	if !ok {
+		return model.Session{}, false
+	}
+	return e.S, true
 }
 
 func (f *Fleet) Account() model.Account {

@@ -102,6 +102,11 @@ func restore(st *store.Store, fl *fleet.Fleet, now int64) error {
 		return err
 	}
 	fl.Restore(ss, acct)
+	if v, ok, err := st.Setting("hide_after_min"); err == nil && ok {
+		if m, err := strconv.Atoi(v); err == nil && m >= 0 {
+			fl.SetHideAfter(int64(m) * 60000)
+		}
+	}
 	evs, err := st.EventsSince(now - 30*60*1000)
 	if err != nil {
 		return err
