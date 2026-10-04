@@ -24,21 +24,3 @@ checksum:
   name_template: checksums.txt
 changelog:
   use: github
-homebrew_casks:
-  - name: trk
-    repository:
-      owner: GujaLomsadze
-      name: homebrew-tap
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/GujaLomsadze/trk
-    description: Live tracker for coding agents
-    skip_upload: auto
-scoops:
-  - name: trk
-    repository:
-      owner: GujaLomsadze
-      name: scoop-bucket
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/GujaLomsadze/trk
-    description: Live tracker for coding agents
-    skip_upload: auto

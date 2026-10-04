@@ -10,7 +10,7 @@ TRK shows two things side by side: **declared intent** (`trk step "writing tests
 curl -fsSL https://raw.githubusercontent.com/GujaLomsadze/trk/main/install.sh | sh
 ```
 
-Or `go install github.com/GujaLomsadze/trk/cmd/trk@latest`. Homebrew and Scoop packages are published with each release.
+Or `go install github.com/GujaLomsadze/trk/cmd/trk@latest`.
 
 Binaries for Linux, macOS and Windows on amd64 and arm64 are on the [releases page](https://github.com/GujaLomsadze/trk/releases).
 
