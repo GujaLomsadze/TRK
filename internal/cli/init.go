@@ -42,10 +42,10 @@ func initCmd(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return true
 		}
 		if !isTTY(stdin) {
-			fmt.Fprintf(stdout, "Kept your status line (%s). Re-run with --yes to chain it through trk.\n", existing)
 			return false
 		}
-		fmt.Fprintf(stdout, "You already have a status line: %s\nChain it through trk? trk records the data, then shows your status line unchanged. [Y/n] ", existing)
+		u := newUI(stdout)
+		fmt.Fprintf(stdout, "\n  %s You already have a status line: %s\n    Chain it through trk? It keeps showing exactly as before. %s ", u.warn("?"), u.bold(existing), u.dim("[Y/n]"))
 		line, _ := in.ReadString('\n')
 		a := strings.ToLower(strings.TrimSpace(line))
 		return a == "" || a == "y" || a == "yes"
@@ -58,37 +58,11 @@ func initCmd(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "trk init: %v\n", err)
 		return 1
 	}
-	prefix := ""
-	if *dry {
-		prefix = "(dry run) would have: "
+	daemonUp := false
+	if !*dry {
+		daemonUp = client.Default().EnsureDaemon(3 * time.Second)
 	}
-	if res.HooksChanged {
-		fmt.Fprintf(stdout, "%sadded trk hooks to %s\n", prefix, paths.Settings)
-	} else {
-		fmt.Fprintln(stdout, "hooks already set up")
-	}
-	switch res.Status {
-	case claudecfg.StatusAdded:
-		fmt.Fprintf(stdout, "%sset the status line to trk\n", prefix)
-	case claudecfg.StatusChained:
-		fmt.Fprintf(stdout, "%schained your status line through trk\n", prefix)
-	case claudecfg.StatusPresent:
-		fmt.Fprintln(stdout, "status line already goes through trk")
-	}
-	if res.SettingsBackup != "" {
-		fmt.Fprintf(stdout, "backup: %s\n", res.SettingsBackup)
-	}
-	if res.ClaudeMDChanged {
-		fmt.Fprintf(stdout, "%sadded the progress-reporting block to %s\n", prefix, paths.ClaudeMD)
-	}
-	if res.ClaudeMDBackup != "" {
-		fmt.Fprintf(stdout, "backup: %s\n", res.ClaudeMDBackup)
-	}
-	if *dry {
-		return 0
-	}
-	client.Default().EnsureDaemon(3 * time.Second)
-	fmt.Fprintf(stdout, "\nDashboard: http://localhost:%d\nRestart any running Claude Code sessions so they load the hooks.\n", config.Port())
+	renderInit(stdout, newUI(stdout), res, paths, *dry, daemonUp, config.Port())
 	return 0
 }
 
