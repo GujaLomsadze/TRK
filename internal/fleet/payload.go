@@ -25,12 +25,23 @@ type payload struct {
 	ToolUseID        string          `json:"tool_use_id"`
 	Message          string          `json:"message"`
 	NotificationType string          `json:"notification_type"`
+	Prompt           string          `json:"prompt"`
+	LastAssistant    string          `json:"last_assistant_message"`
+	AgentID          string          `json:"agent_id"`
+	AgentType        string          `json:"agent_type"`
+	BackgroundTasks  []struct {
+		Status string `json:"status"`
+	} `json:"background_tasks"`
 	// status line
 	Workspace *struct {
 		CurrentDir string `json:"current_dir"`
 	} `json:"workspace"`
 	Cost *struct {
-		TotalCostUSD *float64 `json:"total_cost_usd"`
+		TotalCostUSD       *float64 `json:"total_cost_usd"`
+		TotalLinesAdded    *float64 `json:"total_lines_added"`
+		TotalLinesRemoved  *float64 `json:"total_lines_removed"`
+		TotalAPIDurationMs *float64 `json:"total_api_duration_ms"`
+		TotalDurationMs    *float64 `json:"total_duration_ms"`
 	} `json:"cost"`
 	ContextWindow *struct {
 		UsedPercentage    *float64 `json:"used_percentage"`

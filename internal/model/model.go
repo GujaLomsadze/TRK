@@ -44,6 +44,17 @@ type Session struct {
 	StartedAt   int64    `json:"started_at"`
 	LastEventAt int64    `json:"last_event_at"`
 	DismissedAt int64    `json:"-"` // ✕ on the card; hidden until new activity after this time
+	// Card widgets, from hooks and the status line.
+	LastPrompt   string         `json:"last_prompt,omitempty"`
+	LastPromptAt int64          `json:"last_prompt_at,omitempty"`
+	LastReply    string         `json:"last_reply,omitempty"` // main agent's last message (Stop hook)
+	LastReplyAt  int64          `json:"last_reply_at,omitempty"`
+	LinesAdded   int64          `json:"lines_added"`
+	LinesRemoved int64          `json:"lines_removed"`
+	APIMs        int64          `json:"api_ms"`              // time the model was working
+	WallMs       int64          `json:"wall_ms"`             // session wall time
+	Subagents    map[string]int `json:"subagents,omitempty"` // finished subagents by type; replaced, never mutated
+	BgRunning    int            `json:"bg_running"`          // background tasks still running at the last Stop
 }
 
 // Account is the latest plan-limit snapshot. Resets are unix ms.

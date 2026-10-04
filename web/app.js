@@ -113,13 +113,14 @@ const LAYOUT_KEY = "trk.layout.v1";
 const WIDGETS = {
   task: "Task", step: "Step", progress: "Progress bar", reality: "Reality check",
   tools: "Recent tools", ctx: "Context gauge", model: "Model", files: "Files touched",
+  prompt: "Last prompt", reply: "Last reply", lines: "Lines changed", busy: "Busy vs waiting", subagents: "Subagents",
 };
 const FOOTER_STATS = { elapsed: "Elapsed", tokens: "Tokens", cost: "Cost", model: "Model", last: "Last activity", calls: "Tool calls" };
 const AREAS = { needs: "Needs you", collisions: "Collisions", timeline: "Timeline (bottom)", limits: "Plan usage (header)" };
 const PRESETS = {
   Default: { order: ["task", "progress", "step", "reality", "tools", "model", "files", "ctx"], on: ["task", "progress", "step", "reality", "files", "ctx"], tools: 3, hints: true, reserve: false, footer: ["elapsed", "cost", "model", "last"] },
   Compact: { on: ["task", "progress", "ctx"], tools: 1, hints: false, reserve: false, footer: ["elapsed", "cost"] },
-  Detailed: { on: ["task", "step", "progress", "reality", "tools", "ctx", "model", "files"], tools: 5, hints: true, reserve: true, footer: ["elapsed", "tokens", "cost", "last"] },
+  Detailed: { on: ["task", "step", "progress", "reality", "tools", "ctx", "model", "files", "prompt", "reply", "lines", "busy", "subagents"], tools: 5, hints: true, reserve: true, footer: ["elapsed", "tokens", "cost", "last"] },
   "Context watch": { on: ["ctx", "task", "progress"], tools: 3, hints: true, reserve: false, footer: ["tokens", "cost"] },
 };
 function presetLayout(name) {
@@ -215,6 +216,40 @@ const RENDER = {
   ctx: (s) => ctxGauge(s),
   model: (s) => h("div", { class: "slot-line one" }, "model · ", h("span", { class: "val" }, s.model || DASH)),
   files: (s) => h("div", { class: "slot-line one" }, "files · ", h("span", { class: "val" }, `${s.files_read || 0} read · ${s.files_edited || 0} edited`), h("span", { class: "muted" }, " (30 min)")),
+  prompt: (s) => s.last_prompt
+    ? h("div", { class: "w-prompt" },
+        h("div", { class: "w-who" }, "You", h("span", { class: "live-ago", "data-since": s.last_prompt_at }, dur(now() - s.last_prompt_at) + " ago")),
+        h("div", { class: "w-txt clamp2", title: s.last_prompt }, s.last_prompt))
+    : null,
+  // the reply is the result: shown once the agent has stopped
+  reply: (s) => s.last_reply && (s.status === "done" || s.status === "idle")
+    ? h("div", { class: "w-reply" }, h("div", { class: "w-who" }, "Claude"), h("div", { class: "w-txt clamp2", title: s.last_reply }, s.last_reply))
+    : null,
+  lines: (s) => {
+    const a = s.lines_added || 0, d = s.lines_removed || 0;
+    if (!a && !d) return null;
+    const na = Math.max(a ? 1 : 0, Math.round((a / (a + d)) * CELLS)), nd = Math.min(CELLS - na, Math.max(d ? 1 : 0, Math.round((d / (a + d)) * CELLS)));
+    return h("div", { class: "w-lines" },
+      h("span", { class: "w-lines-n" }, h("span", { class: "w-add" }, "+" + tokens(a)), " ", h("span", { class: "w-del" }, "−" + tokens(d))),
+      h("span", { class: "w-cells", "aria-hidden": "true" }, "[", h("span", { class: "w-add" }, "█".repeat(na)), h("span", { class: "w-del" }, "█".repeat(nd)),
+        h("span", { class: "off" }, "░".repeat(CELLS - na - nd)), "]"));
+  },
+  busy: (s) => {
+    if (!s.wall_ms) return null;
+    const b = Math.round(Math.min(1, (s.api_ms || 0) / s.wall_ms) * 100);
+    return h("div", { class: "w-busy", title: `model working ${dur(s.api_ms || 0)} of ${dur(s.wall_ms)}` },
+      h("div", { class: "w-split" }, h("div", { class: "w-model", style: `width:${b}%` }), h("div", { class: "w-rest", style: `width:${100 - b}%` })),
+      h("div", { class: "w-legend" }, h("span", null, h("i", { class: "w-model" }), "model " + b + "%"), h("span", null, h("i", { class: "w-rest" }), "tools / you " + (100 - b) + "%")));
+  },
+  subagents: (s) => {
+    const types = Object.entries(s.subagents || {}).sort((x, y) => y[1] - x[1]);
+    const n = types.reduce((sum, [, c]) => sum + c, 0), bg = s.bg_running || 0;
+    if (!n && !bg) return null;
+    const full = [n ? `${n} subagent${n === 1 ? "" : "s"}: ` + types.map(([t, c]) => t + " ×" + c).join(", ") : "", bg ? bg + " in background" : ""].filter(Boolean).join(" · ");
+    return h("div", { class: "slot-line one", title: full }, "▸ ",
+      n ? [h("span", { class: "val" }, n + (n === 1 ? " subagent" : " subagents")), " · ", types.map(([t, c]) => t + (c > 1 ? " ×" + c : "")).join(", ")] : null,
+      bg ? [n ? " · " : "", h("span", { class: "w-bg" }, bg + " in background")] : null);
+  },
 };
 const FOOT = {
   elapsed: (s) => h("span", { class: "live-elapsed", "data-since": s.started_at }, "elapsed " + dur(now() - s.started_at)),
@@ -275,6 +310,7 @@ function renderGrid(v) {
 function tickClocks() {
   for (const el of document.querySelectorAll(".live-elapsed")) el.textContent = "elapsed " + dur(now() - Number(el.dataset.since));
   for (const el of document.querySelectorAll(".live-last")) el.textContent = "last " + dur(now() - Number(el.dataset.since));
+  for (const el of document.querySelectorAll(".live-ago")) el.textContent = dur(now() - Number(el.dataset.since)) + " ago";
 }
 
 function renderSide(v) {

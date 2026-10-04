@@ -36,7 +36,17 @@ CREATE TABLE account(
 );`, `
 ALTER TABLE sessions ADD COLUMN dismissed_at INTEGER;
 CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);`, `
-CREATE TABLE claude_pids(pid INTEGER PRIMARY KEY, session_id TEXT NOT NULL, seen_at INTEGER NOT NULL);`}
+CREATE TABLE claude_pids(pid INTEGER PRIMARY KEY, session_id TEXT NOT NULL, seen_at INTEGER NOT NULL);`, `
+ALTER TABLE sessions ADD COLUMN last_prompt TEXT;
+ALTER TABLE sessions ADD COLUMN last_prompt_at INTEGER;
+ALTER TABLE sessions ADD COLUMN last_reply TEXT;
+ALTER TABLE sessions ADD COLUMN last_reply_at INTEGER;
+ALTER TABLE sessions ADD COLUMN lines_added INTEGER;
+ALTER TABLE sessions ADD COLUMN lines_removed INTEGER;
+ALTER TABLE sessions ADD COLUMN api_ms INTEGER;
+ALTER TABLE sessions ADD COLUMN wall_ms INTEGER;
+ALTER TABLE sessions ADD COLUMN subagents TEXT;
+ALTER TABLE sessions ADD COLUMN bg_running INTEGER;`}
 
 type Store struct{ db *sql.DB }
 
@@ -128,23 +138,40 @@ func (s *Store) SessionEvents(id string, limit int) ([]model.Event, error) {
 
 func (s *Store) UpsertSession(x model.Session) error {
 	_, err := s.db.Exec(`INSERT INTO sessions(session_id, name, cwd, repo, branch, model, task, step_text, step_i, step_n, status,
-  ctx_pct, ctx_size, cost_usd, tokens_in, tokens_out, started_at, last_event_at, dismissed_at)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  ctx_pct, ctx_size, cost_usd, tokens_in, tokens_out, started_at, last_event_at, dismissed_at,
+  last_prompt, last_prompt_at, last_reply, last_reply_at, lines_added, lines_removed, api_ms, wall_ms, subagents, bg_running)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(session_id) DO UPDATE SET name=excluded.name, cwd=excluded.cwd, repo=excluded.repo, branch=excluded.branch,
   model=excluded.model, task=excluded.task, step_text=excluded.step_text, step_i=excluded.step_i, step_n=excluded.step_n,
   status=excluded.status, ctx_pct=excluded.ctx_pct, ctx_size=excluded.ctx_size, cost_usd=excluded.cost_usd,
   tokens_in=excluded.tokens_in, tokens_out=excluded.tokens_out, started_at=excluded.started_at, last_event_at=excluded.last_event_at,
-  dismissed_at=excluded.dismissed_at`,
+  dismissed_at=excluded.dismissed_at, last_prompt=excluded.last_prompt, last_prompt_at=excluded.last_prompt_at,
+  last_reply=excluded.last_reply, last_reply_at=excluded.last_reply_at, lines_added=excluded.lines_added,
+  lines_removed=excluded.lines_removed, api_ms=excluded.api_ms, wall_ms=excluded.wall_ms, subagents=excluded.subagents,
+  bg_running=excluded.bg_running`,
 		x.SessionID, x.Name, x.Cwd, x.Repo, x.Branch, x.Model, x.Task, x.StepText, x.StepI, x.StepN, x.Status,
-		x.CtxPct, x.CtxSize, x.CostUSD, x.TokensIn, x.TokensOut, x.StartedAt, x.LastEventAt, x.DismissedAt)
+		x.CtxPct, x.CtxSize, x.CostUSD, x.TokensIn, x.TokensOut, x.StartedAt, x.LastEventAt, x.DismissedAt,
+		x.LastPrompt, x.LastPromptAt, x.LastReply, x.LastReplyAt, x.LinesAdded, x.LinesRemoved, x.APIMs, x.WallMs,
+		subagentsJSON(x.Subagents), x.BgRunning)
 	return err
+}
+
+func subagentsJSON(m map[string]int) any {
+	if len(m) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(m)
+	return string(b)
 }
 
 func (s *Store) Sessions() ([]model.Session, error) {
 	rows, err := s.db.Query(`SELECT session_id, coalesce(name,''), coalesce(cwd,''), coalesce(repo,''), coalesce(branch,''),
   coalesce(model,''), coalesce(task,''), coalesce(step_text,''), coalesce(step_i,0), coalesce(step_n,0), coalesce(status,''),
   ctx_pct, coalesce(ctx_size,0), coalesce(cost_usd,0), coalesce(tokens_in,0), coalesce(tokens_out,0),
-  coalesce(started_at,0), coalesce(last_event_at,0), coalesce(dismissed_at,0) FROM sessions`)
+  coalesce(started_at,0), coalesce(last_event_at,0), coalesce(dismissed_at,0),
+  coalesce(last_prompt,''), coalesce(last_prompt_at,0), coalesce(last_reply,''), coalesce(last_reply_at,0),
+  coalesce(lines_added,0), coalesce(lines_removed,0), coalesce(api_ms,0), coalesce(wall_ms,0), coalesce(subagents,''),
+  coalesce(bg_running,0) FROM sessions`)
 	if err != nil {
 		return nil, err
 	}
@@ -152,10 +179,16 @@ func (s *Store) Sessions() ([]model.Session, error) {
 	var out []model.Session
 	for rows.Next() {
 		var x model.Session
+		var subs string
 		if err := rows.Scan(&x.SessionID, &x.Name, &x.Cwd, &x.Repo, &x.Branch, &x.Model, &x.Task, &x.StepText,
 			&x.StepI, &x.StepN, &x.Status, &x.CtxPct, &x.CtxSize, &x.CostUSD, &x.TokensIn, &x.TokensOut,
-			&x.StartedAt, &x.LastEventAt, &x.DismissedAt); err != nil {
+			&x.StartedAt, &x.LastEventAt, &x.DismissedAt,
+			&x.LastPrompt, &x.LastPromptAt, &x.LastReply, &x.LastReplyAt, &x.LinesAdded, &x.LinesRemoved, &x.APIMs, &x.WallMs,
+			&subs, &x.BgRunning); err != nil {
 			return nil, err
+		}
+		if subs != "" {
+			_ = json.Unmarshal([]byte(subs), &x.Subagents)
 		}
 		out = append(out, x)
 	}

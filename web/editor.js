@@ -8,6 +8,8 @@
     task: "Declared task, 2 lines", step: "step i/N · what it's doing", progress: "20-cell gradient bar",
     reality: "Shown when intent and actions disagree", tools: "Latest tool calls", ctx: "ctx % with the 40/60 bands",
     model: "Model the session runs", files: "Files read / edited, last 30 min",
+    prompt: "Your last message to the agent", reply: "Agent's last message, once it stopped (done / idle)",
+    lines: "Lines added / removed this session", busy: "Model working vs waiting on tools or you", subagents: "Finished subagents by type, background tasks",
   };
   let dragFrom = null;
   const HIDE_OPTS = [[60, "1 hour"], [300, "5 hours"], [720, "12 hours"], [1440, "24 hours"], [0, "Never"]];

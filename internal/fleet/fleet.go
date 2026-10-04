@@ -27,6 +27,7 @@ type entry struct {
 	S          model.Session
 	T          derive.Tracker
 	statusHash uint64
+	subSeen    map[string]bool // subagent ids already counted (SubagentStop can repeat)
 }
 
 type gitCached struct {
@@ -173,8 +174,18 @@ func statusKey(p payload) uint64 {
 		Cost   any
 		Ctx    any
 		Limits any
-	}{p.cwd(), p.modelName(), p.Cost, p.ContextWindow, p.RateLimits})
+	}{p.cwd(), p.modelName(), costKey(p), p.ContextWindow, p.RateLimits})
 	return hash(b)
+}
+
+// costKey is the cost block minus the durations, which tick on every refresh.
+func costKey(p payload) any {
+	if p.Cost == nil {
+		return nil
+	}
+	c := *p.Cost
+	c.TotalAPIDurationMs, c.TotalDurationMs = nil, nil
+	return c
 }
 
 func hash(b []byte) uint64 {
@@ -324,6 +335,11 @@ func (f *Fleet) Apply(ev model.Event, now int64) model.Session {
 	case model.KindPrompt:
 		t.ClearPending(ev.TS)
 		t.Blocked, t.DoneAt = nil, 0
+		if txt := cardText(p.Prompt, false); txt != "" {
+			s.LastPrompt, s.LastPromptAt = txt, ev.TS
+		}
+	case model.KindSubagentStop:
+		e.countSubagent(p)
 	case model.KindToolPre:
 		t.ToolStart(f.call(p, s.Cwd, ev.TS))
 	case model.KindToolPost, model.KindToolFail:
@@ -350,6 +366,19 @@ func (f *Fleet) Apply(ev model.Event, now int64) model.Session {
 			t.DoneAt = ev.TS
 		}
 		t.ClearPending(ev.TS)
+		if ev.Kind == model.KindStop {
+			if txt := cardText(p.LastAssistant, true); txt != "" {
+				s.LastReply, s.LastReplyAt = txt, ev.TS
+			}
+			if p.BackgroundTasks != nil {
+				s.BgRunning = 0
+				for _, b := range p.BackgroundTasks {
+					if b.Status == "running" {
+						s.BgRunning++
+					}
+				}
+			}
+		}
 	case model.KindStatus:
 		e.statusHash = statusKey(p)
 		f.applyStatus(s, p, ev.TS)
@@ -383,8 +412,19 @@ func (f *Fleet) applyStatus(s *model.Session, p payload, ts int64) {
 			s.TokensOut = int64(*cw.TotalOutputTokens)
 		}
 	}
-	if p.Cost != nil && p.Cost.TotalCostUSD != nil {
-		s.CostUSD = *p.Cost.TotalCostUSD
+	if c := p.Cost; c != nil {
+		setNum := func(v *float64, dst *int64) {
+			if v != nil {
+				*dst = int64(*v)
+			}
+		}
+		if c.TotalCostUSD != nil {
+			s.CostUSD = *c.TotalCostUSD
+		}
+		setNum(c.TotalLinesAdded, &s.LinesAdded)
+		setNum(c.TotalLinesRemoved, &s.LinesRemoved)
+		setNum(c.TotalAPIDurationMs, &s.APIMs)
+		setNum(c.TotalDurationMs, &s.WallMs)
 	}
 	rl := p.RateLimits
 	if rl == nil || ts < f.account.UpdatedAt {

@@ -228,3 +228,35 @@ func TestClaudePIDsPersist(t *testing.T) {
 		t.Fatalf("PIDs = %v, %v", got, err)
 	}
 }
+
+func TestSessionWidgetFieldsPersist(t *testing.T) {
+	s, p := open(t)
+	in := model.Session{SessionID: "w", LastPrompt: "fix it", LastPromptAt: 5, LastReply: "fixed", LastReplyAt: 6,
+		LinesAdded: 611, LinesRemoved: 18, APIMs: 1000, WallMs: 5000, Subagents: map[string]int{"Explore": 2}, BgRunning: 1}
+	if err := s.UpsertSession(in); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertSession(model.Session{SessionID: "bare"}); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s2, err := Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	all, _ := s2.Sessions()
+	for _, x := range all {
+		switch x.SessionID {
+		case "w":
+			if x.LastPrompt != "fix it" || x.LastPromptAt != 5 || x.LastReply != "fixed" || x.LastReplyAt != 6 || x.LinesAdded != 611 ||
+				x.LinesRemoved != 18 || x.APIMs != 1000 || x.WallMs != 5000 || x.Subagents["Explore"] != 2 || x.BgRunning != 1 {
+				t.Fatalf("w = %+v", x)
+			}
+		case "bare":
+			if x.Subagents != nil || x.LastPrompt != "" {
+				t.Fatalf("bare = %+v", x)
+			}
+		}
+	}
+}

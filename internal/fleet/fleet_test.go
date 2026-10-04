@@ -297,3 +297,36 @@ func TestPIDMapSurvivesRestart(t *testing.T) {
 		t.Fatalf("after restart: %s via %s, want A via ptree", ev.SessionID, ev.Attribution)
 	}
 }
+
+// Card widgets: last prompt, last reply, lines changed, busy time, subagents.
+func TestCardWidgetFields(t *testing.T) {
+	f := newFleet()
+	now := 1000 * sec
+	ingest(t, f, hook("A", "UserPromptSubmit", "/r/a", `,"prompt":"  fix the\n\nlogin bug <pasted_content id=\"x1\">huge\nlog</pasted_content id=\"x1\"> please"`), now)
+	ingest(t, f, hook("A", "SubagentStop", "/r/a", `,"agent_id":"s1","agent_type":"Explore","last_assistant_message":"subagent text"`), now+sec)
+	ingest(t, f, hook("A", "SubagentStop", "/r/a", `,"agent_id":"s1","agent_type":"Explore"`), now+2*sec) // same agent again: not recounted
+	ingest(t, f, hook("A", "SubagentStop", "/r/a", `,"agent_id":"s2","agent_type":"Explore"`), now+3*sec)
+	ingest(t, f, hook("A", "SubagentStop", "/r/a", `,"agent_id":"s3"`), now+4*sec)
+	ingest(t, f, hook("A", "Stop", "/r/a", `,"last_assistant_message":"Fixed **the** bug in `+"`auth.go`"+`.\n\nTests pass.","background_tasks":[{"status":"running"},{"status":"completed"},{"status":"running"}]`), now+5*sec)
+	st := `{"session_id":"A","cwd":"/r/a","cost":{"total_cost_usd":1.5,"total_lines_added":611,"total_lines_removed":18,"total_api_duration_ms":983099,"total_duration_ms":4579246}}`
+	ingest(t, f, model.Envelope{Source: "statusline", Payload: json.RawMessage(st)}, now+6*sec)
+
+	s := f.View(now + 7*sec).Sessions[0].Session
+	if s.LastPrompt != "fix the login bug [pasted text] please" || s.LastPromptAt != now {
+		t.Errorf("prompt = %q at %d", s.LastPrompt, s.LastPromptAt)
+	}
+	if s.LastReply != "Fixed the bug in auth.go. Tests pass." || s.LastReplyAt != now+5*sec {
+		t.Errorf("reply = %q at %d", s.LastReply, s.LastReplyAt)
+	}
+	if s.LinesAdded != 611 || s.LinesRemoved != 18 || s.APIMs != 983099 || s.WallMs != 4579246 {
+		t.Errorf("lines/busy = %+v", s)
+	}
+	if len(s.Subagents) != 2 || s.Subagents["Explore"] != 2 || s.Subagents["agent"] != 1 || s.BgRunning != 2 {
+		t.Errorf("subagents = %v bg = %d", s.Subagents, s.BgRunning)
+	}
+	long := strings.Repeat("é", 600)
+	ingest(t, f, hook("A", "UserPromptSubmit", "/r/a", `,"prompt":"`+long+`"`), now+8*sec)
+	if p := f.View(now + 9*sec).Sessions[0].LastPrompt; len([]rune(p)) != 400 || !strings.HasSuffix(p, "…") {
+		t.Errorf("long prompt not cut to 400 runes: %d", len([]rune(p)))
+	}
+}

@@ -98,3 +98,17 @@ func TestCardGridSetting(t *testing.T) {
 		}
 	}
 }
+
+// The five card widgets picked on 2026-10-04, each with a renderer and a drawer note.
+func TestCardWidgets(t *testing.T) {
+	app, _ := os.ReadFile("app.js")
+	ed, _ := os.ReadFile("editor.js")
+	for _, id := range []string{"prompt", "reply", "lines", "busy", "subagents"} {
+		if !strings.Contains(string(app), "\n  "+id+": (s) =>") {
+			t.Errorf("app.js has no renderer for %s", id)
+		}
+		if !regexp.MustCompile(`\b` + id + `: "`).Match(ed) {
+			t.Errorf("editor.js has no note for %s", id)
+		}
+	}
+}
