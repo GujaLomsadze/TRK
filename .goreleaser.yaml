@@ -1,0 +1,44 @@
+version: 2
+project_name: trk
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+builds:
+  - id: trk
+    main: ./cmd/trk
+    binary: trk
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/GujaLomsadze/trk/internal/version.Version={{ .Version }}
+archives:
+  - name_template: "trk_{{ .Os }}_{{ .Arch }}"   # version-less so releases/latest/download/<name> works
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+checksum:
+  name_template: checksums.txt
+changelog:
+  use: github
+homebrew_casks:
+  - name: trk
+    repository:
+      owner: GujaLomsadze
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/GujaLomsadze/trk
+    description: Live tracker for coding agents
+    skip_upload: auto
+scoops:
+  - name: trk
+    repository:
+      owner: GujaLomsadze
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/GujaLomsadze/trk
+    description: Live tracker for coding agents
+    skip_upload: auto
