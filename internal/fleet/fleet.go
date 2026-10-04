@@ -50,6 +50,9 @@ type Fleet struct {
 	account   model.Account
 	git       GitLookup
 	gitCache  map[string]gitCached
+	// OnLearn is called (under the fleet lock) when a Claude pid → session mapping is new or changed,
+	// so the daemon can persist it. Must not call back into the fleet.
+	OnLearn func(pid int, sessionID string)
 }
 
 func New(git GitLookup) *Fleet {
@@ -63,6 +66,15 @@ func (f *Fleet) Restore(sessions []model.Session, acct model.Account) {
 		f.sessions[s.SessionID] = &entry{S: s}
 	}
 	f.account = acct
+}
+
+// RestorePIDs reloads persisted Claude pid → session mappings after a restart.
+func (f *Fleet) RestorePIDs(m map[int]string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for pid, sid := range m {
+		f.pids[pid] = sid
+	}
 }
 
 func (f *Fleet) SetHideAfter(ms int64) {
@@ -173,8 +185,12 @@ func hash(b []byte) uint64 {
 
 func (f *Fleet) resolve(env model.Envelope, source string, p payload, now int64) (string, string) {
 	learn := func(sid string) {
-		if env.ClaudePID > 0 && sid != "" {
-			f.pids[env.ClaudePID] = sid
+		if env.ClaudePID <= 0 || sid == "" || f.pids[env.ClaudePID] == sid {
+			return
+		}
+		f.pids[env.ClaudePID] = sid
+		if f.OnLearn != nil {
+			f.OnLearn(env.ClaudePID, sid)
 		}
 	}
 	if (source == model.SourceHook || source == model.SourceStatusline) && p.SessionID != "" {

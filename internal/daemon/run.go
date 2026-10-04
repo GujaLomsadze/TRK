@@ -106,6 +106,12 @@ func restore(st *store.Store, fl *fleet.Fleet, now int64) error {
 		return err
 	}
 	fl.Restore(ss, acct)
+	if pids, err := st.PIDs(now - 24*3600*1000); err == nil { // Claude processes seen in the last day
+		fl.RestorePIDs(pids)
+	}
+	fl.OnLearn = func(pid int, sid string) {
+		_ = st.SavePID(pid, sid, time.Now().UnixMilli())
+	}
 	if v, ok, err := st.Setting("hide_after_min"); err == nil && ok {
 		if m, err := strconv.Atoi(v); err == nil && m >= 0 {
 			fl.SetHideAfter(int64(m) * 60000)

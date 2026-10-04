@@ -35,7 +35,8 @@ CREATE TABLE account(
   five_h_pct REAL, five_h_reset INTEGER, seven_d_pct REAL, seven_d_reset INTEGER, updated_at INTEGER
 );`, `
 ALTER TABLE sessions ADD COLUMN dismissed_at INTEGER;
-CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);`}
+CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);`, `
+CREATE TABLE claude_pids(pid INTEGER PRIMARY KEY, session_id TEXT NOT NULL, seen_at INTEGER NOT NULL);`}
 
 type Store struct{ db *sql.DB }
 
@@ -279,4 +280,31 @@ func (s *Store) TrimToSize(max int64) (int64, error) {
 		}
 	}
 	return total, nil
+}
+
+// SavePID remembers which session a Claude process belongs to, so CLI calls
+// from that process keep their attribution across daemon restarts.
+func (s *Store) SavePID(pid int, sessionID string, ts int64) error {
+	_, err := s.db.Exec(`INSERT INTO claude_pids(pid, session_id, seen_at) VALUES(?,?,?)
+ON CONFLICT(pid) DO UPDATE SET session_id = excluded.session_id, seen_at = excluded.seen_at`, pid, sessionID, ts)
+	return err
+}
+
+// PIDs returns the pid → session mappings seen since the given time (unix ms).
+func (s *Store) PIDs(since int64) (map[int]string, error) {
+	rows, err := s.db.Query(`SELECT pid, session_id FROM claude_pids WHERE seen_at >= ?`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]string{}
+	for rows.Next() {
+		var pid int
+		var sid string
+		if err := rows.Scan(&pid, &sid); err != nil {
+			return nil, err
+		}
+		out[pid] = sid
+	}
+	return out, rows.Err()
 }

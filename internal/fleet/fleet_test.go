@@ -265,3 +265,35 @@ func TestStatusDedupeIgnoresVolatileFields(t *testing.T) {
 		t.Fatal("real change dropped")
 	}
 }
+
+// A daemon restart must not lose which Claude process belongs to which session,
+// or CLI calls fall back to cwd matching and land on another session in the same folder.
+func TestPIDMapSurvivesRestart(t *testing.T) {
+	learned := map[int]string{}
+	f := newFleet()
+	f.OnLearn = func(pid int, sid string) { learned[pid] = sid }
+	now := 1000 * sec
+	a := hook("A", "SessionStart", "/r/shared", "")
+	a.ClaudePID = 111
+	ingest(t, f, a, now)
+	again := hook("A", "PreToolUse", "/r/shared", `,"tool_name":"Bash","tool_input":{"command":"ls"}`)
+	again.ClaudePID = 111
+	calls := 0
+	f.OnLearn = func(pid int, sid string) { calls++; learned[pid] = sid }
+	ingest(t, f, again, now+sec)
+	if calls != 0 {
+		t.Fatalf("OnLearn called %d times for an unchanged mapping", calls)
+	}
+	if learned[111] != "A" {
+		t.Fatalf("learned = %v", learned)
+	}
+
+	// restart: fresh fleet, sessions restored, pid map restored
+	g := newFleet()
+	g.Restore([]model.Session{{SessionID: "A", Cwd: "/r/shared", LastEventAt: now}, {SessionID: "B", Cwd: "/r/shared", LastEventAt: now + 5*sec}}, model.Account{})
+	g.RestorePIDs(learned)
+	ev, _ := ingest(t, g, cli("done", `{"text":"x","cwd":"/r/shared"}`, 111), now+10*sec)
+	if ev.SessionID != "A" || ev.Attribution != model.AttrPtree {
+		t.Fatalf("after restart: %s via %s, want A via ptree", ev.SessionID, ev.Attribution)
+	}
+}

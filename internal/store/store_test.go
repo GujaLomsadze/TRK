@@ -214,3 +214,17 @@ func TestTrimToSizeDropsOldestEventsOnly(t *testing.T) {
 		t.Fatalf("second trim deleted %d (already under cap)", n)
 	}
 }
+
+func TestClaudePIDsPersist(t *testing.T) {
+	s, p := open(t)
+	s.SavePID(4242, "A", 1000)
+	s.SavePID(4242, "B", 2000) // pid reused by a newer session: latest wins
+	s.SavePID(7, "old", 10)
+	s.Close()
+	s2, _ := Open(p)
+	defer s2.Close()
+	got, err := s2.PIDs(500) // only mappings seen since ts 500
+	if err != nil || len(got) != 1 || got[4242] != "B" {
+		t.Fatalf("PIDs = %v, %v", got, err)
+	}
+}

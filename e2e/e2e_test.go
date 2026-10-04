@@ -168,6 +168,15 @@ func TestAcceptance(t *testing.T) {
 		return one != nil && two != nil && one["step_text"] == "one step" && two["step_text"] == "two step"
 	})
 
+	// 3b. Restart between two sessions in the same folder: a CLI call from ONE's
+	// process must still land on ONE (pid map persisted), not on the newer TWO.
+	h.underClaude("wt-one-again", fmt.Sprintf(`echo '%s' | %s hook && sleep 0.3 && kill $(cat %s/trk.pid) && sleep 1 && %s step "after restart"`,
+		hookJSON("ONE", "PreToolUse", "/w/shared", `,"tool_name":"Bash","tool_input":{"command":"ls"}`), h.bin, h.data, h.bin))
+	h.waitFor("attribution kept across restart", 3*time.Second, func() bool {
+		one, two := h.session("ONE"), h.session("TWO")
+		return one != nil && two != nil && one["step_text"] == "after restart" && two["step_text"] == "two step"
+	})
+
 	// 4. Kill the daemon: calls stay fast and silent, next one respawns.
 	h.killDaemon()
 	t.Setenv("unused", "")
