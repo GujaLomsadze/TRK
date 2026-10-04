@@ -89,6 +89,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .task { margin: 0; overflow-wrap: anywhere; }
 .step { color: var(--muted); overflow-wrap: anywhere; }
 .chip { font: 19px/1 var(--font-deco); text-transform: uppercase; padding: 4px 8px; border-radius: 0; white-space: nowrap; text-shadow: var(--glow); }
+.card-head .chip { flex: none; min-width: 9ch; text-align: center; } /* same width for DONE / IDLE / WORKING */
 .chip-accent { background: var(--chip-accent-bg); color: var(--chip-accent-fg); }
 .chip-work { background: rgba(241,220,214,0.08); color: var(--work); text-shadow: 0 0 8px rgba(241,220,214,0.55); }
 .chip-ok { background: rgba(92,255,157,0.10); color: var(--ok); text-shadow: 0 0 8px rgba(92,255,157,0.7); }
@@ -189,7 +190,7 @@ body { padding-bottom: calc(var(--dock-h, 160px) + 24px); }
 /* fixed card anatomy: every slot reserves its height, footer pinned to the bottom */
 .one { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card { display: flex; flex-direction: column; gap: 8px; }
-.head-text { min-width: 0; }
+.head-text { min-width: 0; flex: 1; }
 .slot-task { margin: 0; line-height: 1.5; height: 3em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .slot-step { color: var(--muted); height: 1.5em; }
 .slot-bar { height: 20px; }
@@ -256,9 +257,8 @@ body.no-limits .limits { display: none; }
 .stopped-box p { margin: 0; color: var(--muted); }
 .stopped-box code { font: 19px var(--font-deco); color: var(--work); border: 1px solid var(--border); padding: 6px 10px; justify-self: start; }
 
-/* ✕ on idle/done cards */
-.head-right { display: flex; align-items: flex-start; gap: 6px; flex: none; }
-.dismiss { background: transparent; border: 1px solid var(--rule-soft); color: var(--muted); width: 28px; height: 28px;
+/* ✕ on idle/done cards, left of the name */
+.dismiss { flex: none; background: transparent; border: 1px solid var(--rule-soft); color: var(--muted); width: 28px; height: 28px; margin-right: -2px;
   cursor: pointer; font: 13px/1 var(--font-read); opacity: 0; transition: opacity 0.15s; }
 .card:hover .dismiss, .dismiss:focus-visible { opacity: 1; }
 .dismiss:hover { color: var(--text); border-color: var(--border); }

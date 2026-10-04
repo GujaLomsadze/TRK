@@ -277,13 +277,13 @@ function card(s) {
   const fresh = top && lastTop.has(s.session_id) && lastTop.get(s.session_id) !== top;
   lastTop.set(s.session_id, top);
   return h("article", { class: "panel card st-" + s.status + (s.attention ? " attention" : "") },
+    // ✕ sits left of the name so the status chip keeps the same spot on every card
     h("div", { class: "card-head" },
+      s.status === "idle" || s.status === "done"
+        ? h("button", { class: "dismiss", type: "button", "data-dismiss": s.session_id, "aria-label": "Hide " + s.name, title: "Hide this card (it comes back if the session gets busy again)" }, "✕")
+        : null,
       h("div", { class: "head-text" }, h("h3", { class: "card-name one", title: s.name }, s.name), h("div", { class: "meta one", title: where }, where || DASH)),
-      h("div", { class: "head-right" },
-        h("span", { class: "chip chip-" + tone }, label),
-        s.status === "idle" || s.status === "done"
-          ? h("button", { class: "dismiss", type: "button", "data-dismiss": s.session_id, "aria-label": "Hide " + s.name, title: "Hide this card (it comes back if the session gets busy again)" }, "✕")
-          : null)),
+      h("span", { class: "chip chip-" + tone }, label)),
     layout.slots.filter((x) => x.on).map((x) => RENDER[x.id](s, fresh)),
     layout.footer.length ? h("footer", { class: "card-foot" }, layout.footer.map((k) => FOOT[k](s))) : null);
 }
