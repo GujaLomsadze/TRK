@@ -118,3 +118,20 @@ func TestShellQuote(t *testing.T) {
 		t.Fatalf("got %s", got)
 	}
 }
+
+// The block must steer agents to attach trk to commands they already run:
+// a standalone trk call costs a full extra model request.
+func TestSnippetTellsAgentsToChain(t *testing.T) {
+	for _, want := range []string{
+		`trk step "Writing tests"; go test ./...`, // worked example: trk first, then ;
+		"never pipe",
+		"on its own only",
+	} {
+		if !strings.Contains(Snippet, want) {
+			t.Errorf("Snippet lacks %q", want)
+		}
+	}
+	if !strings.HasPrefix(Snippet, BlockBegin) || !strings.HasSuffix(Snippet, BlockEnd+"\n") {
+		t.Error("Snippet lost its markers")
+	}
+}
