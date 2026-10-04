@@ -14,6 +14,7 @@ import (
 	"github.com/GujaLomsadze/trk/internal/claudecfg"
 	"github.com/GujaLomsadze/trk/internal/client"
 	"github.com/GujaLomsadze/trk/internal/config"
+	"golang.org/x/term"
 )
 
 func initCmd(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -93,11 +94,7 @@ func initCmd(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 func isTTY(r io.Reader) bool {
 	f, ok := r.(*os.File)
-	if !ok {
-		return false
-	}
-	st, err := f.Stat()
-	return err == nil && st.Mode()&os.ModeCharDevice != 0
+	return ok && term.IsTerminal(int(f.Fd()))
 }
 
 // trkCommand returns the command hooks should run: an absolute, stable path.
