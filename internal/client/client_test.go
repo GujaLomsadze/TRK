@@ -1,0 +1,85 @@
+package client
+
+import (
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/GujaLomsadze/trk/internal/model"
+)
+
+func deadURL(t *testing.T) string {
+	l, _ := net.Listen("tcp", "127.0.0.1:0")
+	u := "http://" + l.Addr().String()
+	l.Close()
+	return u
+}
+
+func TestSendDelivers(t *testing.T) {
+	var got atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/events" && r.Method == "POST" {
+			got.Add(1)
+		}
+		w.WriteHeader(202)
+	}))
+	defer ts.Close()
+	c := &Client{BaseURL: ts.URL, HTTP: &http.Client{Timeout: 200 * time.Millisecond}}
+	if !c.Send(model.Envelope{Source: "cli", Kind: "step"}) || got.Load() != 1 {
+		t.Fatal("not delivered")
+	}
+}
+
+func TestSendDownNoSpawnIsFastAndSilent(t *testing.T) {
+	c := &Client{BaseURL: deadURL(t), HTTP: &http.Client{Timeout: 200 * time.Millisecond}}
+	start := time.Now()
+	if c.Send(model.Envelope{Source: "cli"}) {
+		t.Fatal("reported delivered")
+	}
+	if d := time.Since(start); d > 300*time.Millisecond {
+		t.Fatalf("took %v", d)
+	}
+}
+
+func TestSendHangingServerRespectsTimeout(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { time.Sleep(2 * time.Second) }))
+	defer ts.Close()
+	var spawned atomic.Int32
+	c := &Client{BaseURL: ts.URL, HTTP: &http.Client{Timeout: 200 * time.Millisecond}, AllowSpawn: true,
+		Spawn: func() error { spawned.Add(1); return nil }, SpawnBudget: time.Second}
+	start := time.Now()
+	c.Send(model.Envelope{Source: "cli"})
+	if d := time.Since(start); d > 400*time.Millisecond || spawned.Load() != 0 {
+		t.Fatalf("took %v, spawned %d (timeout must not spawn)", d, spawned.Load())
+	}
+}
+
+func TestSendSpawnsThenDelivers(t *testing.T) {
+	url := deadURL(t)
+	addr := url[len("http://"):]
+	var spawned atomic.Int32
+	var srv *http.Server
+	c := &Client{BaseURL: url, HTTP: &http.Client{Timeout: 200 * time.Millisecond}, AllowSpawn: true, SpawnBudget: time.Second,
+		Spawn: func() error {
+			spawned.Add(1)
+			go func() {
+				time.Sleep(150 * time.Millisecond) // daemon boot time
+				l, err := net.Listen("tcp", addr)
+				if err != nil {
+					return
+				}
+				srv = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(202) })}
+				srv.Serve(l)
+			}()
+			return nil
+		}}
+	if !c.Send(model.Envelope{Source: "cli"}) || spawned.Load() != 1 {
+		t.Fatalf("spawned=%d", spawned.Load())
+	}
+	if srv != nil {
+		srv.Close()
+	}
+}
