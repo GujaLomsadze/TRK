@@ -330,3 +330,29 @@ func TestCardWidgetFields(t *testing.T) {
 		t.Errorf("long prompt not cut to 400 runes: %d", len([]rune(p)))
 	}
 }
+
+// On start the daemon restores sessions from the store, then replays the last 30 min of
+// events on top. Subagent counts are additive, so replayed events must not count twice.
+func TestSubagentCountSurvivesRestartReplay(t *testing.T) {
+	now := 1000 * sec
+	f := newFleet()
+	var evs []model.Event
+	for i, id := range []string{"s1", "s2"} {
+		ev, _ := ingest(t, f, hook("A", "SubagentStop", "/r/a", `,"agent_id":"`+id+`","agent_type":"Explore"`), now+int64(i)*sec)
+		evs = append(evs, ev)
+	}
+	saved := f.View(now + 3*sec).Sessions[0].Session
+
+	g := newFleet() // restart: restore, then replay
+	g.Restore([]model.Session{saved}, model.Account{})
+	for _, ev := range evs {
+		g.Apply(ev, now+4*sec)
+	}
+	if n := g.View(now + 5*sec).Sessions[0].Subagents["Explore"]; n != 2 {
+		t.Fatalf("after replay Explore = %d, want 2", n)
+	}
+	ingest(t, g, hook("A", "SubagentStop", "/r/a", `,"agent_id":"s3","agent_type":"Explore"`), now+6*sec) // new after restart: counts
+	if n := g.View(now + 7*sec).Sessions[0].Subagents["Explore"]; n != 3 {
+		t.Fatalf("new subagent after restart: Explore = %d, want 3", n)
+	}
+}

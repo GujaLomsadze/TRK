@@ -28,6 +28,7 @@ type entry struct {
 	T          derive.Tracker
 	statusHash uint64
 	subSeen    map[string]bool // subagent ids already counted (SubagentStop can repeat)
+	restoredAt int64           // last event already folded into the restored session; replays up to it are not re-counted
 }
 
 type gitCached struct {
@@ -64,7 +65,7 @@ func (f *Fleet) Restore(sessions []model.Session, acct model.Account) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, s := range sessions {
-		f.sessions[s.SessionID] = &entry{S: s}
+		f.sessions[s.SessionID] = &entry{S: s, restoredAt: s.LastEventAt}
 	}
 	f.account = acct
 }
@@ -339,7 +340,9 @@ func (f *Fleet) Apply(ev model.Event, now int64) model.Session {
 			s.LastPrompt, s.LastPromptAt = txt, ev.TS
 		}
 	case model.KindSubagentStop:
-		e.countSubagent(p)
+		if ev.TS > e.restoredAt { // the restored count already includes older ones
+			e.countSubagent(p)
+		}
 	case model.KindToolPre:
 		t.ToolStart(f.call(p, s.Cwd, ev.TS))
 	case model.KindToolPost, model.KindToolFail:
