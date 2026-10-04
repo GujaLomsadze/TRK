@@ -63,6 +63,9 @@ func open(stdin io.Reader, stdout, stderr io.Writer) int {
 	c := client.Default()
 	if staleDaemon(c.DaemonVersion(), version.Version) {
 		c.Restart(3 * time.Second) // daemon still running an older binary
+		if running := c.DaemonVersion(); staleDaemon(running, version.Version) {
+			fmt.Fprint(stderr, staleAdvice(newUI(stderr), running, version.Version))
+		}
 	}
 	if !c.EnsureDaemon(3 * time.Second) {
 		fmt.Fprintf(stderr, "trk: daemon not reachable at %s\n", url)

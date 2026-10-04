@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -17,6 +18,16 @@ import (
 
 // staleDaemon: a daemon is running but from a different binary (e.g. after an update).
 func staleDaemon(running, own string) bool { return running != "" && running != own }
+
+// staleAdvice explains how to stop a daemon too old to restart itself (pre-0.1.2 has no /v1/shutdown).
+func staleAdvice(u ui, running, own string) string {
+	stop := "pkill -f 'trk serve'"
+	if runtime.GOOS == "windows" {
+		stop = "taskkill /IM trk.exe /F"
+	}
+	return fmt.Sprintf("  %s An older trk service (%s) is still running, so the dashboard shows the old version.\n    Stop it, then run trk open again (it starts %s):\n      %s\n",
+		u.warn("!"), running, own, u.accent(stop))
+}
 
 func isSourceBuild() bool {
 	_, ok := update.ParseVersion(version.Version)
