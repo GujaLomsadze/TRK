@@ -9,22 +9,28 @@ import (
 )
 
 func TestAssetsEmbedded(t *testing.T) {
-	for _, p := range []string{"index.html", "app.js", "editor.js", "theme.css", "fonts/VT323-Regular.ttf", "fonts/IBMPlexMono-Regular.ttf", "fonts/IBMPlexMono-SemiBold.ttf"} {
+	for _, p := range []string{"index.html", "app.js", "editor.js", "theme.css", "stats.html", "stats.js", "stats.css", "fonts/VT323-Regular.ttf", "fonts/IBMPlexMono-Regular.ttf", "fonts/IBMPlexMono-SemiBold.ttf"} {
 		if _, err := fs.Stat(FS, p); err != nil {
 			t.Errorf("missing %s: %v", p, err)
 		}
 	}
 	idx, _ := fs.ReadFile(FS, "index.html")
-	for _, ref := range []string{"theme.css", "app.js", "TRK.EXE"} {
+	for _, ref := range []string{"theme.css", "app.js", "TRK.EXE", `href="stats.html"`} {
 		if !strings.Contains(string(idx), ref) {
 			t.Errorf("index.html lacks %s", ref)
+		}
+	}
+	stats, _ := fs.ReadFile(FS, "stats.html")
+	for _, ref := range []string{"theme.css", "stats.css", "stats.js", "TRK.EXE"} {
+		if !strings.Contains(string(stats), ref) {
+			t.Errorf("stats.html lacks %s", ref)
 		}
 	}
 }
 
 // Agent-supplied text must never be parsed as HTML.
 func TestNoInnerHTML(t *testing.T) {
-	for _, f := range []string{"app.js", "editor.js"} {
+	for _, f := range []string{"app.js", "editor.js", "stats.js"} {
 		js, _ := os.ReadFile(f)
 		if regexp.MustCompile(`innerHTML|outerHTML|insertAdjacentHTML|document\.write`).Match(js) {
 			t.Fatalf("%s uses an HTML-parsing sink", f)

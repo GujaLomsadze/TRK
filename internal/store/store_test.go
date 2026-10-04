@@ -91,6 +91,45 @@ func TestAccount(t *testing.T) {
 	}
 }
 
+func TestLimitHistory(t *testing.T) {
+	s, _ := open(t)
+	add := func(ts int64, src, payload string) {
+		t.Helper()
+		e := model.Event{TS: ts, Source: src, Kind: "status", Payload: json.RawMessage(payload)}
+		if err := s.Append(&e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rl := func(five, seven float64) string {
+		b, _ := json.Marshal(map[string]any{"rate_limits": map[string]any{
+			"five_hour": map[string]any{"used_percentage": five, "resets_at": 9000},
+			"seven_day": map[string]any{"used_percentage": seven, "resets_at": 99000}}})
+		return string(b)
+	}
+	add(500, "statusline", rl(1, 1))   // before since: dropped
+	add(1000, "statusline", rl(10, 3)) // bucket 1000
+	add(1500, "statusline", rl(12, 3)) // same bucket: highest wins
+	add(1600, "hook", rl(90, 90))      // not a statusline event
+	add(2100, "statusline", `{"x":1}`) // no rate limits
+	add(3200, "statusline", rl(20, 4)) // bucket 3000
+
+	got, err := s.LimitHistory("five_hour", 1000, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []LimitPoint{{TS: 1500, Pct: 12}, {TS: 3200, Pct: 20}}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("five_hour = %+v, want %+v", got, want)
+	}
+	got, _ = s.LimitHistory("seven_day", 0, 1000)
+	if len(got) != 3 || got[2].Pct != 4 {
+		t.Fatalf("seven_day = %+v", got)
+	}
+	if _, err := s.LimitHistory("bogus", 0, 1000); err == nil {
+		t.Fatal("unknown window should error")
+	}
+}
+
 func TestDismissedAtAndSettingsPersist(t *testing.T) {
 	s, p := open(t)
 	if err := s.UpsertSession(model.Session{SessionID: "a", DismissedAt: 42}); err != nil {

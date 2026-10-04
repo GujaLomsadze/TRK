@@ -48,6 +48,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/sessions/{id}/dismiss", s.dismiss)
 	mux.HandleFunc("POST /v1/settings", s.settings)
 	mux.HandleFunc("GET /v1/account", s.getAccount)
+	mux.HandleFunc("GET /v1/limits/history", s.getLimitHistory)
 	mux.HandleFunc("GET /v1/stream", s.stream)
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("POST /v1/shutdown", s.shutdown)
@@ -187,6 +188,45 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getAccount(w http.ResponseWriter, r *http.Request) { writeJSON(w, s.fl.Account()) }
+
+// limitWindows: plan window → stored payload key, window length, chart bucket (all ms).
+var limitWindows = map[string]struct {
+	key            string
+	length, bucket int64
+}{
+	"5h": {"five_hour", 5 * 3600_000, 60_000},
+	"7d": {"seven_day", 7 * 86400_000, 30 * 60_000},
+}
+
+// getLimitHistory serves the readings of the current 5h or 7d window for the Stats page.
+func (s *Server) getLimitHistory(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("window")
+	win, ok := limitWindows[name]
+	if !ok {
+		http.Error(w, "window must be 5h or 7d", http.StatusBadRequest)
+		return
+	}
+	now := s.now()
+	a := s.fl.Account()
+	reset := a.FiveHReset
+	if name == "7d" {
+		reset = a.SevenDReset
+	}
+	if reset <= now { // unknown or stale: show the window that would end now
+		reset = 0
+	}
+	start := now - win.length
+	if reset > 0 {
+		start = reset - win.length
+	}
+	pts, err := s.st.LimitHistory(win.key, start, win.bucket)
+	if err != nil {
+		s.log.Printf("limit history: %v", err)
+		http.Error(w, "store error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]any{"window": name, "start": start, "resets_at": reset, "now": now, "points": pts})
+}
 
 func (s *Server) healthz(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "app": "trk", "version": version.Version})

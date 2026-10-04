@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -220,6 +222,52 @@ func TestStopEndpoint(t *testing.T) {
 	case <-stopped:
 	case <-time.After(time.Second):
 		t.Fatal("OnStop not called")
+	}
+}
+
+func TestLimitHistory(t *testing.T) {
+	ts, srv := newTestServer(t)
+	const t0 = int64(1_791_000_000_000) // a whole minute
+	var clock atomic.Int64
+	srv.now = func() int64 { return clock.Load() }
+	reading := func(at int64, five float64, fiveReset int64) {
+		t.Helper()
+		clock.Store(at)
+		body := fmt.Sprintf(`{"source":"statusline","payload":{"session_id":"S1","rate_limits":{`+
+			`"five_hour":{"used_percentage":%v,"resets_at":%d},"seven_day":{"used_percentage":%v,"resets_at":%d}}}}`,
+			five, fiveReset, five/4, t0/1000+86400)
+		if c := post(t, ts.URL, body, nil); c != 202 {
+			t.Fatalf("post = %d", c)
+		}
+	}
+	reset := t0/1000 + 3600                  // window runs t0-4h .. t0+1h
+	reading(t0-5*3600_000, 80, t0/1000-3600) // previous window: excluded
+	reading(t0-120_000, 10, reset)
+	reading(t0, 12, reset)
+	reading(t0+20_000, 15, reset) // same minute as t0: highest wins
+
+	var got struct {
+		Window   string             `json:"window"`
+		Start    int64              `json:"start"`
+		ResetsAt int64              `json:"resets_at"`
+		Now      int64              `json:"now"`
+		Points   []store.LimitPoint `json:"points"`
+	}
+	getJSON(t, ts.URL+"/v1/limits/history?window=5h", &got)
+	if got.ResetsAt != reset*1000 || got.Start != reset*1000-5*3600_000 || got.Now != t0+20_000 {
+		t.Fatalf("window = %+v", got)
+	}
+	want := []store.LimitPoint{{TS: t0 - 120_000, Pct: 10}, {TS: t0 + 20_000, Pct: 15}}
+	if len(got.Points) != 2 || got.Points[0] != want[0] || got.Points[1] != want[1] {
+		t.Fatalf("points = %+v, want %+v", got.Points, want)
+	}
+	getJSON(t, ts.URL+"/v1/limits/history?window=7d", &got)
+	if got.Window != "7d" || got.Start != (t0/1000+86400)*1000-7*86400_000 || len(got.Points) != 3 {
+		t.Fatalf("7d = %+v", got)
+	}
+	resp, _ := http.Get(ts.URL + "/v1/limits/history?window=1y")
+	if resp.StatusCode != 400 {
+		t.Fatalf("bad window = %d", resp.StatusCode)
 	}
 }
 

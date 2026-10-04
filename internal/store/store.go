@@ -179,6 +179,42 @@ func (s *Store) Account() (model.Account, error) {
 	return a, err
 }
 
+// LimitPoint is one plan-usage reading: unix ms and percent used.
+type LimitPoint struct {
+	TS  int64   `json:"ts"`
+	Pct float64 `json:"pct"`
+}
+
+var limitPaths = map[string]string{
+	"five_hour": "$.rate_limits.five_hour.used_percentage",
+	"seven_day": "$.rate_limits.seven_day.used_percentage",
+}
+
+// LimitHistory reads one plan-usage window ("five_hour" or "seven_day") back out of the
+// stored statusline payloads from since on, keeping the highest reading per bucket ms.
+func (s *Store) LimitHistory(window string, since, bucket int64) ([]LimitPoint, error) {
+	path, ok := limitPaths[window]
+	if !ok {
+		return nil, fmt.Errorf("unknown limit window %q", window)
+	}
+	rows, err := s.db.Query(`SELECT max(ts), max(p) FROM (
+  SELECT ts, json_extract(payload, ?) AS p FROM events WHERE source = 'statusline' AND ts >= ?
+) WHERE p IS NOT NULL GROUP BY ts / ? ORDER BY 1`, path, since, bucket)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []LimitPoint{}
+	for rows.Next() {
+		var p LimitPoint
+		if err := rows.Scan(&p.TS, &p.Pct); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // Setting reads one daemon setting; ok is false when it was never set.
 func (s *Store) Setting(key string) (string, bool, error) {
 	var v string
