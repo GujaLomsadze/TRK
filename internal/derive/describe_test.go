@@ -53,3 +53,14 @@ func TestCategory(t *testing.T) {
 		}
 	}
 }
+
+func TestPathsNormalizedToForwardSlashes(t *testing.T) {
+	_, _, file, _ := Describe("Edit", json.RawMessage(`{"file_path":"C:\\proj\\src\\a.go"}`), "")
+	if file != "C:/proj/src/a.go" {
+		t.Fatalf("file = %q, want C:/proj/src/a.go", file)
+	}
+	got := Collisions([]FileTouch{{"a", `C:\proj\a.go`, 10, true}, {"b", "C:/proj/a.go", 10, true}}, 10)
+	if len(got) != 1 || got[0].Path != "C:/proj/a.go" {
+		t.Fatalf("collisions = %+v", got)
+	}
+}

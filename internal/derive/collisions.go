@@ -1,7 +1,6 @@
 package derive
 
 import (
-	"path/filepath"
 	"sort"
 )
 
@@ -31,7 +30,7 @@ func Collisions(touches []FileTouch, now int64) []Collision {
 		if t.Path == "" || t.TS < now-CollisionWindow {
 			continue
 		}
-		p := filepath.Clean(t.Path)
+		p := NormPath(t.Path)
 		a := byPath[p]
 		if a == nil {
 			a = &acc{sessions: map[string]bool{}}

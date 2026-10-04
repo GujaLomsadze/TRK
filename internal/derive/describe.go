@@ -2,6 +2,7 @@ package derive
 
 import (
 	"encoding/json"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -30,7 +31,7 @@ func Describe(tool string, input json.RawMessage, cwd string) (summary, key, fil
 			p = str("notebook_path")
 		}
 		if p != "" {
-			file = filepath.Clean(p)
+			file = NormPath(p)
 			summary = rel(file, cwd)
 		}
 		edit = tool == "Edit" || tool == "Write" || tool == "MultiEdit" || tool == "NotebookEdit"
@@ -50,6 +51,15 @@ func Describe(tool string, input json.RawMessage, cwd string) (summary, key, fil
 	return trunc(firstLine(summary)), key, file, edit
 }
 
+// NormPath gives one spelling per file on every OS: forward slashes, cleaned.
+// filepath.Clean alone turns /a/b into \a\b on Windows, which broke matching.
+func NormPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	return path.Clean(strings.ReplaceAll(p, `\`, "/"))
+}
+
 func Category(tool string) string {
 	switch tool {
 	case "Read", "Grep", "Glob", "LS", "WebFetch", "WebSearch", "NotebookRead":
@@ -60,13 +70,13 @@ func Category(tool string) string {
 	return "run"
 }
 
-func rel(path, cwd string) string {
+func rel(p, cwd string) string {
 	if cwd != "" {
-		if r, err := filepath.Rel(cwd, path); err == nil && !strings.HasPrefix(r, "..") {
+		if r, err := filepath.Rel(filepath.FromSlash(NormPath(cwd)), filepath.FromSlash(p)); err == nil && !strings.HasPrefix(r, "..") {
 			return filepath.ToSlash(r)
 		}
 	}
-	return filepath.ToSlash(path)
+	return p
 }
 
 func firstLine(s string) string {
