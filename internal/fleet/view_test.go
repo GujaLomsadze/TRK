@@ -57,3 +57,27 @@ func ids(ss []SessionView) []string {
 	}
 	return out
 }
+
+// Cards keep a fixed slot: order is by session start, never by activity or status.
+func TestViewOrderIsStable(t *testing.T) {
+	f := newFleet()
+	now := 1000 * sec
+	ingest(t, f, hook("first", "SessionStart", "/r/a", ""), now)
+	ingest(t, f, hook("second", "SessionStart", "/r/b", ""), now+sec)
+	ingest(t, f, hook("third", "SessionStart", "/r/c", ""), now+2*sec)
+	want := []string{"first", "second", "third"}
+	check := func(when string) {
+		t.Helper()
+		got := ids(f.View(now + 10*sec).Sessions)
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("%s: order = %v, want %v", when, got, want)
+			}
+		}
+	}
+	check("initial")
+	ingest(t, f, hook("third", "PreToolUse", "/r/c", `,"tool_name":"Bash","tool_input":{"command":"ls"}`), now+5*sec)
+	check("after newest activity")
+	ingest(t, f, hook("second", "PermissionRequest", "/r/b", `,"tool_name":"Bash","tool_input":{"command":"rm"}`), now+6*sec)
+	check("after status change to waiting")
+}

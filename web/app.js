@@ -104,15 +104,41 @@ function card(s) {
       : null,
     ctxGauge(s),
     h("footer", { class: "card-foot" },
-      h("span", null, "elapsed " + dur(now() - s.started_at)),
+      h("span", { class: "live-elapsed", "data-since": s.started_at }, "elapsed " + dur(now() - s.started_at)),
       h("span", null, tokens((s.tokens_in || 0) + (s.tokens_out || 0)) + " tok"),
       h("span", null, money(s.cost_usd))));
 }
 
+// Keyed update: a card's DOM is replaced only when its data changed, and cards
+// keep their slot. Rebuilding everything every second made cards flicker.
+const cards = new Map(); // session_id -> { sig, el }
+
 function renderGrid(v) {
-  $("grid").replaceChildren(...(v.sessions.length
-    ? v.sessions.map(card)
-    : [h("div", { class: "panel empty" }, "No agents yet. Start Claude Code (after `trk init`) or run `trk start \"task\"`.")]));
+  const grid = $("grid");
+  if (!v.sessions.length) {
+    cards.clear();
+    grid.replaceChildren(h("div", { class: "panel empty" }, "No agents yet. Start Claude Code (after `trk init`) or run `trk start \"task\"`."));
+    return;
+  }
+  grid.querySelector(".empty")?.remove();
+  const seen = new Set();
+  v.sessions.forEach((s, i) => {
+    seen.add(s.session_id);
+    const sig = JSON.stringify(s);
+    let c = cards.get(s.session_id);
+    if (!c || c.sig !== sig) {
+      const el = card(s);
+      if (c) c.el.replaceWith(el);
+      c = { sig, el };
+      cards.set(s.session_id, c);
+    }
+    if (grid.children[i] !== c.el) grid.insertBefore(c.el, grid.children[i] || null);
+  });
+  for (const [id, c] of cards) if (!seen.has(id)) { c.el.remove(); cards.delete(id); }
+}
+
+function tickClocks() {
+  for (const el of document.querySelectorAll(".live-elapsed")) el.textContent = "elapsed " + dur(now() - Number(el.dataset.since));
 }
 
 function renderSide(v) {
@@ -159,6 +185,16 @@ function render() {
   renderTimeline(view);
 }
 
+// Between snapshots only clocks move; header/inbox/timeline are cheap and have no animation.
+let ticks = 0;
+function tick() {
+  if (!view) return;
+  tickClocks();
+  renderHeader(view);
+  renderSide(view);
+  if (++ticks % 5 === 0) renderTimeline(view);
+}
+
 function setConn(live) {
   const el = $("conn");
   el.textContent = live ? "● live" : "○ reconnecting";
@@ -177,4 +213,4 @@ function connect() {
 }
 
 connect();
-setInterval(render, 1000);
+setInterval(tick, 1000);

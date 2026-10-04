@@ -88,13 +88,12 @@ func (f *Fleet) View(now int64) View {
 		}
 	}
 	disambiguate(v.Sessions)
+	// Fixed slots: order by session start so cards never jump around.
+	// Attention is shown by glow and the Needs-you inbox, not by position.
 	sort.Slice(v.Sessions, func(i, j int) bool {
 		a, b := v.Sessions[i], v.Sessions[j]
-		if ra, rb := rank(a.Status), rank(b.Status); ra != rb {
-			return ra < rb
-		}
-		if a.LastEventAt != b.LastEventAt {
-			return a.LastEventAt > b.LastEventAt
+		if a.StartedAt != b.StartedAt {
+			return a.StartedAt < b.StartedAt
 		}
 		return a.SessionID < b.SessionID
 	})
@@ -191,18 +190,6 @@ func buildView(e *entry, now int64) SessionView {
 		}
 	}
 	return sv
-}
-
-func rank(status string) int {
-	switch status {
-	case derive.StatusWaiting, derive.StatusBlocked, derive.StatusLooping:
-		return 0
-	case derive.StatusWorking:
-		return 1
-	case derive.StatusIdle:
-		return 2
-	}
-	return 3
 }
 
 func disambiguate(ss []SessionView) {
