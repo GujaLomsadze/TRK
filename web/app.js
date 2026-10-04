@@ -105,43 +105,115 @@ function ctxGauge(s) {
   return h("div", { class: "ctx ctx-" + c.level },
     h("div", { class: "ctx-line" }, "ctx " + pct(s.ctx_pct) + size),
     cellBar((s.ctx_pct || 0) / 100, ctxCell, "small"),
-    h("div", { class: "ctx-hints" }, (c.hints || []).map((t) => h("div", { class: "ctx-hint one", title: t }, "▲ " + t))));
+    layout.hints ? h("div", { class: "ctx-hints" }, (c.hints || []).map((t) => h("div", { class: "ctx-hint one", title: t }, "▲ " + t))) : null);
+}
+
+// ---- card layout (edited in the Layout drawer, saved in this browser) ----
+const LAYOUT_KEY = "trk.layout.v1";
+const WIDGETS = {
+  task: "Task", step: "Step", progress: "Progress bar", reality: "Reality check",
+  tools: "Recent tools", ctx: "Context gauge", model: "Model", files: "Files touched",
+};
+const FOOTER_STATS = { elapsed: "Elapsed", tokens: "Tokens", cost: "Cost", model: "Model", last: "Last activity", calls: "Tool calls" };
+const AREAS = { needs: "Needs you", collisions: "Collisions", timeline: "Timeline (bottom)", limits: "Plan usage (header)" };
+const PRESETS = {
+  Default: { on: ["task", "step", "progress", "reality", "tools", "ctx"], tools: 3, hints: true, reserve: true, footer: ["elapsed", "tokens", "cost"] },
+  Compact: { on: ["task", "progress", "ctx"], tools: 1, hints: false, reserve: false, footer: ["elapsed", "cost"] },
+  Detailed: { on: ["task", "step", "progress", "reality", "tools", "ctx", "model", "files"], tools: 5, hints: true, reserve: true, footer: ["elapsed", "tokens", "cost", "last"] },
+  "Context watch": { on: ["ctx", "task", "progress"], tools: 3, hints: true, reserve: false, footer: ["tokens", "cost"] },
+};
+function presetLayout(name) {
+  const p = PRESETS[name];
+  const order = [...p.on, ...Object.keys(WIDGETS).filter((id) => !p.on.includes(id))];
+  return { preset: name, slots: order.map((id) => ({ id, on: p.on.includes(id) })), tools: p.tools, hints: p.hints,
+    reserve: p.reserve, footer: [...p.footer], areas: { needs: true, collisions: true, timeline: true, limits: true } };
+}
+// loadLayout trusts nothing from storage: unknown widgets are dropped, missing ones appended (off).
+function loadLayout() {
+  const def = presetLayout("Default");
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "null"); } catch { saved = null; }
+  if (!saved || !Array.isArray(saved.slots)) return def;
+  const seen = new Set();
+  const slots = saved.slots.filter((x) => WIDGETS[x.id] && !seen.has(x.id) && seen.add(x.id)).map((x) => ({ id: x.id, on: !!x.on }));
+  for (const id of Object.keys(WIDGETS)) if (!seen.has(id)) slots.push({ id, on: false });
+  return {
+    preset: PRESETS[saved.preset] ? saved.preset : "",
+    slots,
+    tools: Math.min(5, Math.max(1, Number(saved.tools) || 3)),
+    hints: saved.hints !== false,
+    reserve: saved.reserve !== false,
+    footer: (Array.isArray(saved.footer) ? saved.footer : def.footer).filter((k) => FOOTER_STATS[k]).slice(0, 4),
+    areas: Object.fromEntries(Object.keys(AREAS).map((k) => [k, !saved.areas || saved.areas[k] !== false])),
+  };
+}
+let layout = loadLayout();
+function setLayout(next) {
+  layout = next;
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch { /* private window: keep in memory */ }
+  cards.clear();
+  $("grid").replaceChildren();
+  applyAreas();
+  render();
+}
+function applyAreas() {
+  document.body.classList.toggle("no-side", !layout.areas.needs && !layout.areas.collisions);
+  document.body.classList.toggle("no-timeline", !layout.areas.timeline);
+  document.body.classList.toggle("no-limits", !layout.areas.limits);
+  document.querySelector(".side .needs-box").hidden = !layout.areas.needs;
+  document.querySelector(".side .coll-box").hidden = !layout.areas.collisions;
 }
 
 const lastTop = new Map(); // session_id -> newest tool line seen
+const mark = (st) => (st === "ok" ? "✓" : st === "fail" ? "✗" : "…");
+
+// Each widget renders into a slot with a reserved height, so every card has the same shape.
+const RENDER = {
+  task: (s) => h("p", { class: "slot-task" + (s.task ? "" : " muted"), title: s.task || "" }, s.task || "no task declared"),
+  step: (s) => {
+    const n = s.step_n || 0;
+    return h("div", { class: "slot-step one", title: s.step_text || "" },
+      n ? `step ${s.step_i || 0}/${n}` : "step " + DASH, s.step_text ? " · " + s.step_text : "",
+      s.status === "working" ? h("span", { class: "cursor", "aria-hidden": "true" }) : null);
+  },
+  progress: (s) => h("div", { class: "slot-bar" }, cellBar(s.step_n ? (s.step_i || 0) / s.step_n : 0, progCell)),
+  reality: (s) => (s.reality || layout.reserve)
+    ? h("div", { class: "slot-reality" }, s.reality ? h("div", { class: "reality" }, h("span", { class: "reality-label" }, "reality"), s.reality) : null)
+    : null,
+  tools: (s, fresh) => {
+    const rows = (s.recent || []).slice(0, layout.tools);
+    while (rows.length < layout.tools) rows.push(null);
+    return h("ul", { class: "tools" }, rows.map((c, k) => c
+      ? h("li", { class: "tool one tool-" + c.state + (k === 0 && fresh ? " flash" : ""), title: c.tool + " " + c.summary },
+          "› ", h("span", { class: "tool-name" }, c.tool), " ", c.summary, " ", h("span", { class: "mark" }, mark(c.state)))
+      : h("li", { class: "tool one blank" }, k === 0 && !(s.recent || []).length ? "no tool calls yet" : "\u00a0")));
+  },
+  ctx: (s) => ctxGauge(s),
+  model: (s) => h("div", { class: "slot-line one" }, "model · ", h("span", { class: "val" }, s.model || DASH)),
+  files: (s) => h("div", { class: "slot-line one" }, "files · ", h("span", { class: "val" }, `${s.files_read || 0} read · ${s.files_edited || 0} edited`), h("span", { class: "muted" }, " (30 min)")),
+};
+const FOOT = {
+  elapsed: (s) => h("span", { class: "live-elapsed", "data-since": s.started_at }, "elapsed " + dur(now() - s.started_at)),
+  tokens: (s) => h("span", null, tokens((s.tokens_in || 0) + (s.tokens_out || 0)) + " tok"),
+  cost: (s) => h("span", null, money(s.cost_usd)),
+  model: (s) => h("span", null, s.model || DASH),
+  last: (s) => h("span", { class: "live-last", "data-since": s.last_event_at }, "last " + dur(now() - s.last_event_at)),
+  calls: (s) => h("span", null, (s.tool_calls || 0) + " calls"),
+};
 
 function card(s) {
   const [label, tone] = CHIP[s.status] || CHIP.working;
-  const n = s.step_n || 0, i = s.step_i || 0;
   const where = [s.repo, s.branch].filter(Boolean).join(" · ") || s.cwd || "";
-  const mark = (st) => (st === "ok" ? "✓" : st === "fail" ? "✗" : "…");
   // flash the newest tool line when it changes
   const top = s.recent && s.recent[0] ? s.recent[0].tool + s.recent[0].summary : "";
   const fresh = top && lastTop.has(s.session_id) && lastTop.get(s.session_id) !== top;
   lastTop.set(s.session_id, top);
-  // Every slot is always rendered with a reserved height, so cards never change
-  // shape as data comes and goes (spec: nothing jumps).
-  const tools = (s.recent || []).slice(0, 3);
-  while (tools.length < 3) tools.push(null);
   return h("article", { class: "panel card st-" + s.status + (s.attention ? " attention" : "") },
     h("div", { class: "card-head" },
       h("div", { class: "head-text" }, h("h3", { class: "card-name one", title: s.name }, s.name), h("div", { class: "meta one", title: where }, where || DASH)),
       h("span", { class: "chip chip-" + tone }, label)),
-    h("p", { class: "slot-task" + (s.task ? "" : " muted"), title: s.task || "" }, s.task || "no task declared"),
-    h("div", { class: "slot-step one", title: s.step_text || "" },
-      n ? `step ${i}/${n}` : "step " + DASH, s.step_text ? " · " + s.step_text : "",
-      s.status === "working" ? h("span", { class: "cursor", "aria-hidden": "true" }) : null),
-    h("div", { class: "slot-bar" }, cellBar(n ? i / n : 0, progCell)),
-    h("div", { class: "slot-reality" }, s.reality ? h("div", { class: "reality" }, h("span", { class: "reality-label" }, "reality"), s.reality) : null),
-    h("ul", { class: "tools" }, tools.map((c, k) => c
-      ? h("li", { class: "tool one tool-" + c.state + (k === 0 && fresh ? " flash" : ""), title: c.tool + " " + c.summary },
-          "› ", h("span", { class: "tool-name" }, c.tool), " ", c.summary, " ", h("span", { class: "mark" }, mark(c.state)))
-      : h("li", { class: "tool one blank" }, k === 0 && !s.recent?.length ? "no tool calls yet" : "\u00a0"))),
-    ctxGauge(s),
-    h("footer", { class: "card-foot" },
-      h("span", { class: "live-elapsed", "data-since": s.started_at }, "elapsed " + dur(now() - s.started_at)),
-      h("span", null, tokens((s.tokens_in || 0) + (s.tokens_out || 0)) + " tok"),
-      h("span", null, money(s.cost_usd))));
+    layout.slots.filter((x) => x.on).map((x) => RENDER[x.id](s, fresh)),
+    layout.footer.length ? h("footer", { class: "card-foot" }, layout.footer.map((k) => FOOT[k](s))) : null);
 }
 
 // Keyed update: a card's DOM is replaced only when its data changed, and cards
@@ -174,6 +246,7 @@ function renderGrid(v) {
 
 function tickClocks() {
   for (const el of document.querySelectorAll(".live-elapsed")) el.textContent = "elapsed " + dur(now() - Number(el.dataset.since));
+  for (const el of document.querySelectorAll(".live-last")) el.textContent = "last " + dur(now() - Number(el.dataset.since));
 }
 
 function renderSide(v) {
@@ -248,5 +321,6 @@ function connect() {
   es.onerror = () => setConn(false); // EventSource reconnects by itself
 }
 
+applyAreas();
 connect();
 setInterval(tick, 1000);

@@ -39,6 +39,10 @@ type SessionView struct {
 	Need      *derive.Need      `json:"need,omitempty"`
 	Ctx       derive.CtxBand    `json:"ctx"`
 	Calls     []derive.ToolCall `json:"calls,omitempty"`
+	// Activity in the tracker window (last 30 min), for the optional card widgets.
+	ToolCalls   int `json:"tool_calls"`
+	FilesRead   int `json:"files_read"` // read but never edited
+	FilesEdited int `json:"files_edited"`
 }
 
 type NeedItem struct {
@@ -167,7 +171,24 @@ func buildView(e *entry, now int64) SessionView {
 			sv.Reality = fmt.Sprintf("no progress report in %d min · %d tool calls since", (now-t.ProgressAt)/60000, n)
 		}
 	}
-	for i := len(t.Calls) - 1; i >= 0 && len(sv.Recent) < 3; i-- {
+	edited, read := map[string]bool{}, map[string]bool{}
+	for _, c := range t.Calls {
+		if c.File == "" {
+			continue
+		}
+		if c.Edit {
+			edited[c.File] = true
+		} else {
+			read[c.File] = true
+		}
+	}
+	for f := range read {
+		if !edited[f] {
+			sv.FilesRead++
+		}
+	}
+	sv.ToolCalls, sv.FilesEdited = len(t.Calls), len(edited)
+	for i := len(t.Calls) - 1; i >= 0 && len(sv.Recent) < 5; i-- {
 		c := t.Calls[i]
 		state := "run"
 		if c.Failed {

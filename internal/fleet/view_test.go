@@ -81,3 +81,23 @@ func TestViewOrderIsStable(t *testing.T) {
 	ingest(t, f, hook("second", "PermissionRequest", "/r/b", `,"tool_name":"Bash","tool_input":{"command":"rm"}`), now+6*sec)
 	check("after status change to waiting")
 }
+
+func TestViewCountsFilesAndCalls(t *testing.T) {
+	f := newFleet()
+	now := 1000 * sec
+	for i, in := range []string{
+		`,"tool_name":"Read","tool_use_id":"a","tool_input":{"file_path":"/r/a/x.go"}`,
+		`,"tool_name":"Read","tool_use_id":"b","tool_input":{"file_path":"/r/a/z.go"}`,
+		`,"tool_name":"Edit","tool_use_id":"c","tool_input":{"file_path":"/r/a/x.go"}`,
+		`,"tool_name":"Write","tool_use_id":"d","tool_input":{"file_path":"/r/a/y.go"}`,
+		`,"tool_name":"Bash","tool_use_id":"e","tool_input":{"command":"ls"}`,
+	} {
+		e := hook("A", "PreToolUse", "/r/a", in)
+		e.TS = now + int64(i)*sec
+		ingest(t, f, e, now+int64(i)*sec)
+	}
+	s := f.View(now + 10*sec).Sessions[0]
+	if s.ToolCalls != 5 || s.FilesRead != 1 || s.FilesEdited != 2 {
+		t.Fatalf("calls=%d read=%d edited=%d", s.ToolCalls, s.FilesRead, s.FilesEdited)
+	}
+}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestAssetsEmbedded(t *testing.T) {
-	for _, p := range []string{"index.html", "app.js", "theme.css", "fonts/VT323-Regular.ttf", "fonts/IBMPlexMono-Regular.ttf", "fonts/IBMPlexMono-SemiBold.ttf"} {
+	for _, p := range []string{"index.html", "app.js", "editor.js", "theme.css", "fonts/VT323-Regular.ttf", "fonts/IBMPlexMono-Regular.ttf", "fonts/IBMPlexMono-SemiBold.ttf"} {
 		if _, err := fs.Stat(FS, p); err != nil {
 			t.Errorf("missing %s: %v", p, err)
 		}
@@ -24,9 +24,11 @@ func TestAssetsEmbedded(t *testing.T) {
 
 // Agent-supplied text must never be parsed as HTML.
 func TestNoInnerHTML(t *testing.T) {
-	js, _ := os.ReadFile("app.js")
-	if regexp.MustCompile(`innerHTML|outerHTML|insertAdjacentHTML|document\.write`).Match(js) {
-		t.Fatal("app.js uses an HTML-parsing sink")
+	for _, f := range []string{"app.js", "editor.js"} {
+		js, _ := os.ReadFile(f)
+		if regexp.MustCompile(`innerHTML|outerHTML|insertAdjacentHTML|document\.write`).Match(js) {
+			t.Fatalf("%s uses an HTML-parsing sink", f)
+		}
 	}
 }
 

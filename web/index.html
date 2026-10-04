@@ -18,13 +18,14 @@
     <a class="btn btn-secondary active" href="#">Fleet</a>
     <span class="btn btn-secondary disabled" title="coming later">Timeline</span>
     <span class="btn btn-secondary disabled" title="coming later">Orbit</span>
+    <button class="btn btn-secondary icon-btn" id="layout-open" type="button" aria-haspopup="dialog" aria-label="Card layout" title="Card layout">⚙</button>
   </nav>
 </header>
 <main class="layout">
   <section class="grid" id="grid" aria-label="agents"></section>
   <aside class="side">
-    <section class="panel box"><h2>Needs you</h2><ul class="list" id="needs"></ul></section>
-    <section class="panel box"><h2>Collisions</h2><ul class="list" id="collisions"></ul></section>
+    <section class="panel box needs-box"><h2>Needs you</h2><ul class="list" id="needs"></ul></section>
+    <section class="panel box coll-box"><h2>Collisions</h2><ul class="list" id="collisions"></ul></section>
   </aside>
 </main>
 <section class="panel timeline" aria-label="last 30 minutes">
@@ -33,6 +34,14 @@
   <div class="tl-body" id="timeline"></div>
 </section>
 <div class="scanlines" aria-hidden="true"></div>
+<dialog class="panel drawer" id="layout" aria-labelledby="layout-title">
+  <div class="drawer-head"><h2 class="drawer-title" id="layout-title">⚙ Card layout</h2>
+    <button class="btn btn-secondary" id="layout-close" type="button" aria-label="Close">✕</button></div>
+  <div class="drawer-body" id="layout-body"></div>
+  <div class="drawer-foot"><span class="meta">Changes apply live and are saved in this browser.</span>
+    <button class="btn btn-secondary" id="layout-reset" type="button">Reset to default</button></div>
+</dialog>
 <script src="app.js"></script>
+<script src="editor.js"></script>
 </body>
 </html>
