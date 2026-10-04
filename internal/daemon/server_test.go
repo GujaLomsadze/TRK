@@ -181,3 +181,23 @@ func getJSON(t *testing.T, url string, v any) {
 		t.Fatal(err)
 	}
 }
+
+func TestShutdownEndpoint(t *testing.T) {
+	ts, s := newTestServer(t)
+	called := make(chan struct{}, 1)
+	s.OnShutdown = func() { called <- struct{}{} }
+	req, _ := http.NewRequest("POST", ts.URL+"/v1/shutdown", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	if resp, _ := http.DefaultClient.Do(req); resp.StatusCode != 403 {
+		t.Fatalf("foreign origin shutdown = %d", resp.StatusCode)
+	}
+	resp, err := http.Post(ts.URL+"/v1/shutdown", "application/json", nil)
+	if err != nil || resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("shutdown = %v %v", resp, err)
+	}
+	select {
+	case <-called:
+	case <-time.After(time.Second):
+		t.Fatal("OnShutdown not called")
+	}
+}

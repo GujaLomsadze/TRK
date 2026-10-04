@@ -83,3 +83,28 @@ func TestSendSpawnsThenDelivers(t *testing.T) {
 		srv.Close()
 	}
 }
+
+func TestVersionAndShutdown(t *testing.T) {
+	var stopped atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/healthz":
+			w.Write([]byte(`{"ok":true,"app":"trk","version":"0.1.0"}`))
+		case "/v1/shutdown":
+			stopped.Add(1)
+			w.WriteHeader(202)
+		}
+	}))
+	defer ts.Close()
+	c := &Client{BaseURL: ts.URL, HTTP: &http.Client{Timeout: 200 * time.Millisecond}}
+	if v := c.DaemonVersion(); v != "0.1.0" {
+		t.Fatalf("DaemonVersion = %q", v)
+	}
+	if !c.Shutdown() || stopped.Load() != 1 {
+		t.Fatal("shutdown not sent")
+	}
+	down := &Client{BaseURL: deadURL(t), HTTP: &http.Client{Timeout: 200 * time.Millisecond}}
+	if v := down.DaemonVersion(); v != "" {
+		t.Fatalf("down daemon version = %q", v)
+	}
+}

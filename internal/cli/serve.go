@@ -18,6 +18,7 @@ import (
 	"github.com/GujaLomsadze/trk/internal/client"
 	"github.com/GujaLomsadze/trk/internal/config"
 	"github.com/GujaLomsadze/trk/internal/daemon"
+	"github.com/GujaLomsadze/trk/internal/version"
 )
 
 func serve(stdout, stderr io.Writer) int {
@@ -56,9 +57,14 @@ func serve(stdout, stderr io.Writer) int {
 	return 0
 }
 
-func open(stdout, stderr io.Writer) int {
+func open(stdin io.Reader, stdout, stderr io.Writer) int {
 	url := config.BaseURL() + "/"
-	if !client.Default().EnsureDaemon(3 * time.Second) {
+	offerUpdate(stdin, stdout, stderr)
+	c := client.Default()
+	if staleDaemon(c.DaemonVersion(), version.Version) {
+		c.Restart(3 * time.Second) // daemon still running an older binary
+	}
+	if !c.EnsureDaemon(3 * time.Second) {
 		fmt.Fprintf(stderr, "trk: daemon not reachable at %s\n", url)
 		return 1
 	}

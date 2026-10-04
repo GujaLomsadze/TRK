@@ -60,7 +60,10 @@ func Run(ctx context.Context, o Options) error {
 	_ = os.WriteFile(pidFile, []byte(strconv.Itoa(os.Getpid())), 0o644)
 	defer os.Remove(pidFile)
 
+	ctx, stopAll := context.WithCancel(ctx)
+	defer stopAll()
 	srv := NewServer(st, fl, o.Logger)
+	srv.OnShutdown = stopAll
 	hs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 5 * time.Second} // no WriteTimeout: SSE
 	loopCtx, stopLoop := context.WithCancel(ctx)
 	defer stopLoop()

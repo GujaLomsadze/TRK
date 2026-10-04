@@ -27,6 +27,15 @@ Worried about your Claude setup? Read [How TRK works with Claude Code](#how-trk-
 
 You never need to run `trk serve` yourself: the first `trk` call that finds no daemon starts one in the background.
 
+## Updating
+
+```sh
+trk update           # download the latest release, verify its checksum, swap the binary, restart the daemon
+trk update --check   # only tell me if there's a newer version
+```
+
+`trk open` also checks once a day and offers the update when one is out. Built from source? Use `git pull && make install`.
+
 ## Agent verbs
 
 | Command | Meaning |
@@ -67,6 +76,7 @@ All optional:
 | `TRK_URL` | — | Full daemon URL override, e.g. to reach a daemon on the other side of WSL. Disables auto-spawn. |
 | `TRK_DATA_DIR` | `~/.local/share/trk` · `~/Library/Application Support/trk` · `%APPDATA%\trk` | SQLite event log + daemon log |
 | `TRK_SESSION` | — | Force which session CLI calls are attributed to |
+| `TRK_NO_UPDATE_CHECK` | — | Set to anything to stop `trk open` from checking GitHub for updates |
 
 ## How TRK works with Claude Code (and why it won't break it)
 
@@ -102,7 +112,7 @@ Before writing, TRK saves each original as `<file>.trk-backup-YYYYMMDD-HHMMSS`. 
 | "A hook could approve or deny things" | Async hook output is discarded by Claude Code, and `trk hook` prints nothing anyway. TRK cannot approve, deny, block or inject anything into Claude's context. |
 | "If TRK crashes, Claude breaks" | Every `trk` call gives up after ~200 ms and **always exits 0**. Daemon down → silent no-op. The next call restarts it. |
 | "It messes up my status line" | A chained status line prints your command's output byte for byte. TRK only reads the JSON on the way through. |
-| "It phones home" | No. The daemon binds `127.0.0.1` only and makes no outbound requests. Requests from web pages (foreign `Origin`/`Host`) are refused. |
+| "It phones home" | The daemon and hooks never go online: the daemon binds `127.0.0.1` only, and requests from web pages (foreign `Origin`/`Host`) are refused. The only outbound request is `trk open` asking GitHub, at most once a day, whether a newer release exists. Turn it off with `TRK_NO_UPDATE_CHECK=1`. |
 | "It rewrites my settings badly" | Invalid JSON → TRK stops and writes nothing. Key order, number formatting, file permissions and symlinked dotfiles are preserved. |
 
 ### Good to know

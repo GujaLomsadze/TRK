@@ -13,6 +13,7 @@ const usageText = `trk — live tracker for coding agents
   trk serve                      run daemon + dashboard (auto-spawned when needed)
   trk open                       open the dashboard
   trk init                       wire up Claude Code hooks, status line, CLAUDE.md
+  trk update [--check]           install the latest release (restarts the daemon)
 
   trk start "<task>" --steps N   declare a task
   trk step "<what>"              declare the current step
@@ -48,7 +49,9 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "serve":
 		return serve(stdout, stderr)
 	case "open":
-		return open(stdout, stderr)
+		return open(stdin, stdout, stderr)
+	case "update":
+		return updateCmd(rest, stdout, stderr)
 	case "init":
 		return initCmd(rest, stdin, stdout, stderr)
 	case "version", "--version", "-v":

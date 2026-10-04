@@ -81,6 +81,43 @@ func (c *Client) Healthy() bool {
 	return resp.StatusCode == 200
 }
 
+// DaemonVersion is the running daemon's version, or "" if none answers.
+func (c *Client) DaemonVersion() string {
+	resp, err := c.HTTP.Get(c.BaseURL + "/healthz")
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	var h struct {
+		App     string `json:"app"`
+		Version string `json:"version"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&h) != nil || h.App != "trk" {
+		return ""
+	}
+	return h.Version
+}
+
+// Shutdown asks the daemon to exit (the next trk call starts a fresh one).
+func (c *Client) Shutdown() bool {
+	resp, err := c.HTTP.Post(c.BaseURL+"/v1/shutdown", "application/json", nil)
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == http.StatusAccepted
+}
+
+// Restart stops a running daemon and starts one from the current binary.
+func (c *Client) Restart(wait time.Duration) bool {
+	if c.Shutdown() {
+		for deadline := time.Now().Add(wait); time.Now().Before(deadline) && c.Healthy(); {
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	return c.EnsureDaemon(wait)
+}
+
 // EnsureDaemon is for interactive commands (open/init) that may wait longer.
 func (c *Client) EnsureDaemon(wait time.Duration) bool {
 	if c.Healthy() {
