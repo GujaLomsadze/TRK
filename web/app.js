@@ -117,14 +117,15 @@ const WIDGETS = {
 const FOOTER_STATS = { elapsed: "Elapsed", tokens: "Tokens", cost: "Cost", model: "Model", last: "Last activity", calls: "Tool calls" };
 const AREAS = { needs: "Needs you", collisions: "Collisions", timeline: "Timeline (bottom)", limits: "Plan usage (header)" };
 const PRESETS = {
-  Default: { on: ["task", "step", "progress", "reality", "tools", "ctx"], tools: 3, hints: true, reserve: true, footer: ["elapsed", "tokens", "cost"] },
+  Default: { order: ["task", "progress", "step", "reality", "tools", "model", "files", "ctx"], on: ["task", "progress", "step", "reality", "files", "ctx"], tools: 3, hints: true, reserve: false, footer: ["elapsed", "cost", "model", "last"] },
   Compact: { on: ["task", "progress", "ctx"], tools: 1, hints: false, reserve: false, footer: ["elapsed", "cost"] },
   Detailed: { on: ["task", "step", "progress", "reality", "tools", "ctx", "model", "files"], tools: 5, hints: true, reserve: true, footer: ["elapsed", "tokens", "cost", "last"] },
   "Context watch": { on: ["ctx", "task", "progress"], tools: 3, hints: true, reserve: false, footer: ["tokens", "cost"] },
 };
 function presetLayout(name) {
   const p = PRESETS[name];
-  const order = [...p.on, ...Object.keys(WIDGETS).filter((id) => !p.on.includes(id))];
+  const first = p.order || p.on; // a preset may place hidden widgets too
+  const order = [...first, ...Object.keys(WIDGETS).filter((id) => !first.includes(id))];
   return { preset: name, slots: order.map((id) => ({ id, on: p.on.includes(id) })), tools: p.tools, hints: p.hints,
     reserve: p.reserve, footer: [...p.footer], areas: { needs: true, collisions: true, timeline: true, limits: true } };
 }

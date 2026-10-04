@@ -51,3 +51,14 @@ func TestPerCellBars(t *testing.T) {
 		}
 	}
 }
+
+// The out-of-the-box card layout (picked by the user, 2026-10-04).
+func TestDefaultLayout(t *testing.T) {
+	js, _ := os.ReadFile("app.js")
+	want := `Default: { order: ["task", "progress", "step", "reality", "tools", "model", "files", "ctx"], ` +
+		`on: ["task", "progress", "step", "reality", "files", "ctx"], tools: 3, hints: true, reserve: false, ` +
+		`footer: ["elapsed", "cost", "model", "last"] },`
+	if !strings.Contains(string(js), want) {
+		t.Fatalf("app.js Default preset is not the chosen default:\n%s", want)
+	}
+}
