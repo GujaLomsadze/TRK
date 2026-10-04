@@ -47,14 +47,47 @@ func (h *harness) run(stdin string, args ...string) (int, string, time.Duration)
 	return cmd.ProcessState.ExitCode(), string(out), time.Since(start)
 }
 
-// underClaude runs a shell script whose parent process is named "claude".
+// fakeClaudeSrc is a tiny program that runs `sh -c <script>` as a child. Built as
+// a binary named "claude" it stands in for Claude Code in the process tree.
+// (Copying /bin/sh doesn't work on macOS: it's a shim that re-execs bash.)
+const fakeClaudeSrc = `package main
+
+import (
+	"os"
+	"os/exec"
+)
+
+func main() {
+	cmd := exec.Command("sh", "-c", os.Args[1])
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if cmd.Run() != nil {
+		os.Exit(1)
+	}
+}
+`
+
+func (h *harness) fakeClaude() string {
+	dir := filepath.Join(filepath.Dir(h.bin), "fakeclaude")
+	fake := filepath.Join(dir, "claude")
+	if _, err := os.Stat(fake); err == nil {
+		return fake
+	}
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "main.go"), []byte(fakeClaudeSrc), 0o644)
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module fakeclaude\n\ngo 1.21\n"), 0o644)
+	build := exec.Command("go", "build", "-o", fake, ".")
+	build.Dir = dir
+	if out, err := build.CombinedOutput(); err != nil {
+		h.t.Fatalf("build fake claude: %v\n%s", err, out)
+	}
+	return fake
+}
+
+// underClaude runs a shell script whose ancestor process is named "claude".
 func (h *harness) underClaude(name, script string) {
 	dir := filepath.Join(filepath.Dir(h.bin), name)
 	os.MkdirAll(dir, 0o755)
-	fake := filepath.Join(dir, "claude")
-	src, _ := os.ReadFile("/bin/sh")
-	os.WriteFile(fake, src, 0o755)
-	cmd := exec.Command(fake, "-c", script+"; true")
+	cmd := exec.Command(h.fakeClaude(), script)
 	cmd.Env, cmd.Dir = h.env, dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		h.t.Fatalf("fake claude %s: %v %s", name, err, out)
