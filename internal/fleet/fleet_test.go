@@ -246,3 +246,22 @@ func TestLoopReality(t *testing.T) {
 		t.Fatalf("status=%s reality=%q", s.Status, s.Reality)
 	}
 }
+
+func TestStatusDedupeIgnoresVolatileFields(t *testing.T) {
+	f := newFleet()
+	now := 1000 * sec
+	mk := func(ms int) model.Envelope {
+		p := fmt.Sprintf(`{"session_id":"A","cost":{"total_cost_usd":1.5,"total_duration_ms":%d},"context_window":{"used_percentage":40}}`, ms)
+		return model.Envelope{Source: "statusline", Payload: json.RawMessage(p)}
+	}
+	if _, ok := ingest(t, f, mk(1000), now); !ok {
+		t.Fatal("first status dropped")
+	}
+	if _, ok := ingest(t, f, mk(11000), now+10*sec); ok {
+		t.Fatal("status differing only in total_duration_ms was stored again")
+	}
+	changed := model.Envelope{Source: "statusline", Payload: json.RawMessage(`{"session_id":"A","cost":{"total_cost_usd":1.6},"context_window":{"used_percentage":41}}`)}
+	if _, ok := ingest(t, f, changed, now+20*sec); !ok {
+		t.Fatal("real change dropped")
+	}
+}

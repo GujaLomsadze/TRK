@@ -94,11 +94,24 @@ func (f *Fleet) Normalize(env model.Envelope, now int64) (model.Event, bool) {
 	defer f.mu.Unlock()
 	sid, attr := f.resolve(env, source, p, now)
 	if kind == model.KindStatus {
-		if e := f.sessions[sid]; e != nil && e.statusHash == hash(raw) {
+		if e := f.sessions[sid]; e != nil && e.statusHash == statusKey(p) {
 			return model.Event{}, false
 		}
 	}
 	return model.Event{TS: ts, SessionID: sid, Source: source, Kind: kind, Payload: raw, Attribution: attr}, true
+}
+
+// statusKey hashes only the status-line fields TRK uses, so refreshes that change
+// nothing but volatile fields (durations, line counts) are dropped as duplicates.
+func statusKey(p payload) uint64 {
+	b, _ := json.Marshal(struct {
+		Cwd    string
+		Model  string
+		Cost   any
+		Ctx    any
+		Limits any
+	}{p.cwd(), p.modelName(), p.Cost, p.ContextWindow, p.RateLimits})
+	return hash(b)
 }
 
 func hash(b []byte) uint64 {
@@ -271,7 +284,7 @@ func (f *Fleet) Apply(ev model.Event, now int64) model.Session {
 		}
 		t.ClearPending(ev.TS)
 	case model.KindStatus:
-		e.statusHash = hash(ev.Payload)
+		e.statusHash = statusKey(p)
 		f.applyStatus(s, p, ev.TS)
 	}
 	t.Prune(now)
