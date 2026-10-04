@@ -340,7 +340,10 @@ func (f *Fleet) Apply(ev model.Event, now int64) model.Session {
 			s.LastPrompt, s.LastPromptAt = txt, ev.TS
 		}
 	case model.KindSubagentStop:
-		if ev.TS > e.restoredAt { // the restored count already includes older ones
+		// An untyped agent finishing after the turn ended is Claude Code's own
+		// background agent, not one the session spawned.
+		internal := p.AgentType == "" && t.DoneAt > 0
+		if ev.TS > e.restoredAt && !internal { // the restored count already includes older ones
 			e.countSubagent(p)
 		}
 	case model.KindToolPre:

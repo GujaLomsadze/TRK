@@ -131,10 +131,12 @@ func KindForHook(event string) string {
 
 // IsActivity reports whether an event kind means the agent is doing something
 // (as opposed to bookkeeping: status updates, notifications, turn ends).
+// SubagentStop is not activity: Claude Code fires one for an internal agent right
+// after every Stop, and a real subagent's work already shows up as tool events.
 func IsActivity(kind string) bool {
 	switch kind {
 	case KindStart, KindStep, KindProgress, KindBlocked, KindDone, KindSessionStart, KindPrompt,
-		KindToolPre, KindToolPost, KindToolFail, KindPermission, KindCompact, KindSubagentStop:
+		KindToolPre, KindToolPost, KindToolFail, KindPermission, KindCompact:
 		return true
 	}
 	return false

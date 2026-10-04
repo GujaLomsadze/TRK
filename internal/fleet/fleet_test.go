@@ -331,6 +331,24 @@ func TestCardWidgetFields(t *testing.T) {
 	}
 }
 
+// Claude Code fires a SubagentStop for an untyped internal agent ~1.5 s after every
+// Stop. It must neither flip the finished session back to working nor count as a subagent.
+func TestInternalSubagentAfterStopKeepsDone(t *testing.T) {
+	f := newFleet()
+	now := 1000 * sec
+	ingest(t, f, hook("A", "UserPromptSubmit", "/r/a", `,"prompt":"hi"`), now)
+	ingest(t, f, hook("A", "Stop", "/r/a", ""), now+sec)
+	ingest(t, f, hook("A", "SubagentStop", "/r/a", `,"agent_id":"x1","agent_type":""`), now+2*sec)
+
+	s := f.View(now + 3*sec).Sessions[0].Session
+	if s.Status != derive.StatusDone {
+		t.Errorf("status = %q, want done", s.Status)
+	}
+	if len(s.Subagents) != 0 {
+		t.Errorf("internal agent counted: %v", s.Subagents)
+	}
+}
+
 // On start the daemon restores sessions from the store, then replays the last 30 min of
 // events on top. Subagent counts are additive, so replayed events must not count twice.
 func TestSubagentCountSurvivesRestartReplay(t *testing.T) {
