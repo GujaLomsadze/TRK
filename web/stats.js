@@ -38,6 +38,7 @@ function dur(ms) {
   if (m >= 60) return Math.floor(m / 60) + "h " + (m % 60) + "m";
   return m + "m";
 }
+const PERFECT = 0.05; // ±5% of the safe pace counts as perfect
 const tone3 = (p) => (p >= 80 ? "red" : p >= 50 ? "yellow" : "ok");
 
 // One entry per plan window. `bucket` matches the server's grouping in /v1/limits/history.
@@ -135,9 +136,13 @@ function render(id) {
   }
 
   const p = project(c, d, basis);
-  const hits = p.capAt <= p.reset;
+  // Verdict from your pace ÷ the safe pace: within ±PERFECT you finish right around the reset
+  // (a few minutes either way), slower leaves headroom, faster runs out before the reset.
+  const ratio = p.budget > 0 ? p.rate / p.budget : Infinity;
+  const perfect = p.used < 100 && p.rate > 0 && Math.abs(ratio - 1) <= PERFECT;
+  const hits = p.capAt <= p.reset && !perfect;
   const rateTxt = (r) => (r * c.perUnit).toFixed(c.digits) + c.unit;
-  const tone = hits ? "red" : p.atReset >= 80 ? "yellow" : "ok";
+  const tone = hits ? "red" : "ok";
   const B = (cls, txt) => h("b", { class: cls }, txt);
 
   let word, sentence, delta;
@@ -146,19 +151,22 @@ function render(id) {
     sentence = ["You're at the limit until the reset at ", B("c-red", c.when(p.reset)), "."];
     delta = [B("c-red", dur(p.reset - p.tNow)), "until you can work again"];
   } else {
-    word = hits ? "▲ Slow down" : tone === "yellow" ? "● Hold this pace" : "✓ On track";
+    word = hits ? "▲ Slow down" : perfect ? "✓ Perfect pace" : "✓ Good pace";
     sentence = hits
       ? ["At this pace you run out at ", B("c-red", c.when(p.capAt)), ", ", B("", dur(p.reset - p.capAt)), " before the reset."]
-      : tone === "yellow"
-      ? ["You'll land at about ", B("c-yellow", Math.round(p.atReset) + "%"), " by the reset. Don't speed up."]
-      : ["You'll land at about ", B("c-ok", Math.round(p.atReset) + "%"), " by the reset. Plenty of room."];
-    if (p.rate > p.budget) delta = [B("c-red", "−" + Math.round((1 - p.budget / p.rate) * 100) + "%"), "cut your pace by this much to make it"];
+      : perfect
+      ? ["Right on the safe pace: you'll use about all of it just as it resets at ", B("c-ok", c.when(p.reset)), "."]
+      : ["You'll land at about ", B("c-ok", Math.round(p.atReset) + "%"), " by the reset. ", p.atReset < 60 ? "Plenty of room." : "Room to spare."];
+    if (perfect) {
+      const off = Math.round((ratio - 1) * 100);
+      delta = [B("c-ok", off === 0 ? "±0%" : (off > 0 ? "+" : "−") + Math.abs(off) + "%"), "from the safe pace · keep it like this"];
+    } else if (p.rate > p.budget) delta = [B("c-red", "−" + Math.round((1 - p.budget / p.rate) * 100) + "%"), "cut your pace by this much to make it"];
     else if (p.rate === 0) delta = [B("c-ok", rateTxt(p.budget)), "idle now; this pace is still safe"];
     else delta = [B("c-ok", "+" + Math.round((p.budget / p.rate - 1) * 100) + "%"), "room to speed up and still make it"];
   }
   const top = Math.max(p.rate, p.budget) * 1.1 || 1;
   const bar = (r, cls) => h("div", { class: "pace-track" }, h("div", { class: "pace-fill " + cls, style: `width:${((r / top) * 100).toFixed(1)}%` }));
-  const fast = p.rate > p.budget ? "red" : "ok";
+  const fast = hits ? "red" : "ok";
   const advice = h("div", { class: "advice " + { red: "v-red", yellow: "v-warn", ok: "v-ok" }[tone] },
     h("div", { class: "say" }, h("div", { class: "word c-" + tone }, word), h("p", null, sentence)),
     h("div", { class: "pace" },
@@ -171,7 +179,8 @@ function render(id) {
   const tile = (lab, numEl, sub) => h("div", { class: "tile" }, h("span", { class: "lab" }, lab), numEl, h("span", { class: "sub2" }, sub));
   const tiles = h("div", { class: "tiles" },
     tile("used now", num(Math.round(p.used), tone3(p.used)), stale ? "last reading " + dur(p.tNow - p.lastTs) + " ago" : "of this " + c.short + " limit"),
-    tile("at reset", num(hits ? 100 : Math.round(p.atReset), tone), hits ? "capped at " + c.when(p.capAt) : "if you keep this pace"),
+    tile("at reset", num(hits ? 100 : Math.min(100, Math.round(p.atReset)), tone),
+      hits ? "capped at " + c.when(p.capAt) : perfect ? "right as it resets" : "if you keep this pace"),
     tile("resets in", h("span", { class: "num" }, dur(p.reset - p.tNow)), c.when(p.reset)));
 
   const plot = h("div", { class: "plot" });
