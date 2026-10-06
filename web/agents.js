@@ -15,7 +15,7 @@ window.TRKAgents = (function () {
   const session = (sid) => ((view && view.sessions) || []).find((s) => s.session_id === sid);
   const enabled = () => !!(view && view.terminals_enabled && view.terminals_supported);
   const liveTermFor = (sid) => terms.find((t) => !t.exited && t.session_id === sid);
-  const termName = (t) => { const s = session(t.session_id); return s ? s.name : t.name; };
+  const termName = (t) => { const s = session(t.session_id); return s ? s.name : t.title || t.name; };
   // only real Claude session ids can be resumed (not cwd-… fallbacks or `trk start` ids)
   const resumable = (sid) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sid || "");
   const shq = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
@@ -197,6 +197,9 @@ window.TRKAgents = (function () {
     const on = enabled();
     const err = h("span", { class: "ag-err", role: "alert" });
     const dir = h("input", { id: "ag-dir", list: "ag-dirs", autocomplete: "off", spellcheck: "false", value: (from && from.dir) || dirs[0] || "", placeholder: "/path/to/project" });
+    const base = (d) => d.split("/").filter(Boolean).pop() || "";
+    const name = h("input", { id: "ag-name", maxlength: "80", autocomplete: "off", spellcheck: "false", placeholder: base(dir.value) || "the folder's name" });
+    dir.addEventListener("input", () => { name.placeholder = base(dir.value) || "the folder's name"; });
     const prompt = h("textarea", { id: "ag-prompt", placeholder: "optional, e.g. run the tests and fix what fails" });
     const go = h("button", { class: "btn btn-primary", type: "submit", disabled: on ? null : "" }, "Launch claude");
     const f = h("form", { class: "ag-form" },
@@ -205,18 +208,19 @@ window.TRKAgents = (function () {
       h("datalist", { id: "ag-dirs" }, dirs.map((d) => h("option", { value: d }))),
       dirs.length ? h("div", { class: "ag-recent" }, dirs.slice(0, 8).map((d) =>
         h("button", { type: "button", "data-dir": d, title: d }, d.split("/").filter(Boolean).pop() || d))) : null,
+      h("label", { class: "ag-lab", for: "ag-name" }, "Name ", h("span", { class: "ag-opt" }, "optional · shown on its card")), name,
       h("label", { class: "ag-lab", for: "ag-prompt" }, "First prompt"), prompt,
       h("div", { class: "ag-go" }, go, err),
       h("p", { class: "meta" }, on
         ? "Runs claude in a terminal owned by TRK. Closing this drawer keeps it running. If TRK restarts, resume it from its card."
         : view && !view.terminals_supported ? "Terminals don't run on this system (native Windows)."
         : "Terminals are off. Turn them on in ⚙ Card layout → Terminals."));
-    f.addEventListener("click", (e) => { const b = e.target.closest("[data-dir]"); if (b) dir.value = b.dataset.dir; });
+    f.addEventListener("click", (e) => { const b = e.target.closest("[data-dir]"); if (b) { dir.value = b.dataset.dir; name.placeholder = base(dir.value); } });
     f.addEventListener("submit", async (e) => {
       e.preventDefault();
       err.textContent = "";
       go.disabled = true;
-      try { await launch({ dir: dir.value.trim(), prompt: prompt.value }); }
+      try { await launch({ dir: dir.value.trim(), prompt: prompt.value, title: name.value }); }
       catch (x) { err.textContent = String(x.message || x); go.disabled = false; }
     });
     if (from) setTimeout(() => prompt.focus(), 50);
@@ -324,10 +328,8 @@ window.TRKAgents = (function () {
   $("ag-close").addEventListener("click", () => dlg.close());
   dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); }); // backdrop
   dlg.addEventListener("close", dropViewer); // closing never stops an agent
-  $("agent-open").addEventListener("click", () => {
-    const live = terms.filter((t) => !t.exited);
-    open(live.length ? live[live.length - 1].id : "new");
-  });
+  // "+ Agent" always starts on the New agent form; running agents stay one click away in the tabs
+  $("agent-open").addEventListener("click", () => open("new"));
 
   return { update, running, openSession };
 })();

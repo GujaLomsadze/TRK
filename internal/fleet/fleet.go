@@ -126,9 +126,8 @@ func (f *Fleet) Dismiss(id string, now int64) error {
 // MaxTitle is the longest card title, in characters.
 const MaxTitle = 80
 
-// SetTitle gives a session a chosen card title; an empty one goes back to the automatic name.
-// Control characters are dropped and runs of space collapse to one.
-func (f *Fleet) SetTitle(id, title string) error {
+// CleanTitle drops control characters and collapses runs of space; too long is an error.
+func CleanTitle(title string) (string, error) {
 	title = strings.Join(strings.Fields(strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
 			return ' '
@@ -136,7 +135,16 @@ func (f *Fleet) SetTitle(id, title string) error {
 		return r
 	}, title)), " ")
 	if utf8.RuneCountInString(title) > MaxTitle {
-		return ErrTitleLong
+		return "", ErrTitleLong
+	}
+	return title, nil
+}
+
+// SetTitle gives a session a chosen card title; an empty one goes back to the automatic name.
+func (f *Fleet) SetTitle(id, title string) error {
+	title, err := CleanTitle(title)
+	if err != nil {
+		return err
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()

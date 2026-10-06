@@ -3,6 +3,7 @@ package daemon
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/GujaLomsadze/trk/internal/fleet"
@@ -68,7 +69,9 @@ func (s *Server) linkSessions(only map[string]bool) map[string]string {
 		for _, t := range live {
 			if tb.Descends(pid, t.PID) {
 				owner = t.ID
-				s.terms.Link(t.ID, sid)
+				if s.terms.Link(t.ID, sid) && t.Title != "" {
+					s.titleOnce(sid, t.Title) // the name typed in "+ New agent"
+				}
 				break
 			}
 		}
@@ -77,6 +80,25 @@ func (s *Server) linkSessions(only map[string]bool) map[string]string {
 		}
 	}
 	return out
+}
+
+// titleOnce names a newly linked session unless it already has a title.
+func (s *Server) titleOnce(sid, title string) {
+	if row, ok := s.fl.SessionRow(sid); ok && row.Title == "" {
+		s.applyTitle(sid, title)
+	}
+}
+
+func (s *Server) applyTitle(sid, title string) {
+	if s.fl.SetTitle(sid, title) != nil {
+		return
+	}
+	if row, ok := s.fl.SessionRow(sid); ok {
+		if err := s.st.UpsertSession(row); err != nil {
+			s.log.Printf("persist title: %v", err)
+		}
+	}
+	s.dirty.Store(true)
 }
 
 // SetTerminals turns the terminals on or off (Run restores it from the store).
@@ -99,6 +121,12 @@ func (s *Server) startTerm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad json", http.StatusBadRequest)
 		return
 	}
+	title, err := fleet.CleanTitle(sp.Title)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("name: %v (at most %d characters)", err, fleet.MaxTitle), http.StatusBadRequest)
+		return
+	}
+	sp.Title = title
 	// Two claudes on one conversation would both append to its transcript.
 	if sp.Resume != "" && !sp.Fork {
 		if where, ok := s.linkSessions(map[string]bool{sp.Resume: true})[sp.Resume]; ok {
@@ -122,6 +150,9 @@ func (s *Server) startTerm(w http.ResponseWriter, r *http.Request) {
 	s.log.Printf("terminal %s: %s %v in %s (pid %d)", t.Info().ID, s.terms.Command, sp.Resume, t.Info().Dir, t.Info().PID)
 	if sp.Resume != "" && !sp.Fork {
 		s.terms.DropExited(sp.Resume, t.Info().ID) // the resumed terminal replaces the one that ended
+		if sp.Title != "" {
+			s.applyTitle(sp.Resume, sp.Title) // a resume names a session we already know
+		}
 	}
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, t.Info())

@@ -128,7 +128,10 @@ func TestTerminalLinksSessionAndGuardsResume(t *testing.T) {
 	start := func(extra string) *http.Response {
 		return postJSON(t, ts.URL+"/v1/terms", `{"dir":`+jsonStr(dir)+extra+`}`)
 	}
-	r := start("")
+	if r := start(`,"title":"` + strings.Repeat("x", 81) + `"`); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("too-long name = %d", r.StatusCode)
+	}
+	r := start(`,"title":"  Flaky e2e  "`)
 	var first struct {
 		ID  string
 		PID int
@@ -148,6 +151,14 @@ func TestTerminalLinksSessionAndGuardsResume(t *testing.T) {
 		return view.Running["S-TRK"] == first.ID && len(view.Terminals) == 1 && view.Terminals[0].SessionID == "S-TRK"
 	}
 	waitFor(t, linked, "terminal linked to S-TRK") // events are ingested asynchronously
+	// the name typed for the new agent becomes its card title once the session is linked
+	waitFor(t, func() bool {
+		var v struct {
+			Sessions []struct{ SessionID, Name, Title string } `json:"sessions"`
+		}
+		getJSON(t, ts.URL+"/v1/sessions", &v)
+		return len(v.Sessions) == 1 && v.Sessions[0].Title == "Flaky e2e" && v.Sessions[0].Name == "Flaky e2e"
+	}, "S-TRK titled from its terminal")
 	if r := start(`,"resume":"S-TRK"`); r.StatusCode != http.StatusConflict {
 		t.Fatalf("resume of a running session = %d, want 409", r.StatusCode)
 	}

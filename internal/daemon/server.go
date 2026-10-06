@@ -186,21 +186,16 @@ func (s *Server) setTitle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `want {"title": "..."} ("" restores the automatic name)`, http.StatusBadRequest)
 		return
 	}
-	switch err := s.fl.SetTitle(id, *body.Title); err {
-	case nil:
-	case fleet.ErrNotFound:
-		http.NotFound(w, r)
-		return
-	default:
+	title, err := fleet.CleanTitle(*body.Title)
+	if err != nil {
 		http.Error(w, fmt.Sprintf("%v (at most %d characters)", err, fleet.MaxTitle), http.StatusBadRequest)
 		return
 	}
-	if row, ok := s.fl.SessionRow(id); ok {
-		if err := s.st.UpsertSession(row); err != nil {
-			s.log.Printf("persist title: %v", err)
-		}
+	if _, ok := s.fl.SessionRow(id); !ok {
+		http.NotFound(w, r)
+		return
 	}
-	s.dirty.Store(true)
+	s.applyTitle(id, title)
 	w.WriteHeader(http.StatusNoContent)
 }
 

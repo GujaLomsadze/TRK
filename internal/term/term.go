@@ -33,6 +33,7 @@ type Spec struct {
 	Prompt string `json:"prompt"`
 	Resume string `json:"resume,omitempty"`
 	Fork   bool   `json:"fork,omitempty"`
+	Title  string `json:"title,omitempty"` // card title for the session it starts (the daemon applies it)
 }
 
 var sessionID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
@@ -45,6 +46,7 @@ type Info struct {
 	Prompt string `json:"prompt,omitempty"`
 	Resume string `json:"resume,omitempty"` // session id it was started to resume or fork
 	Fork   bool   `json:"fork,omitempty"`
+	Title  string `json:"title,omitempty"`
 	// SessionID is the Claude session running in it, once its hooks have reported one
 	// (the daemon links it by process id). Kept after the process exits.
 	SessionID string `json:"session_id,omitempty"`
@@ -91,7 +93,7 @@ func (m *Manager) Start(sp Spec) (*Term, error) {
 	}
 	t := &Term{
 		info: Info{ID: newID(), Dir: dir, Name: filepath.Base(dir), Prompt: strings.TrimSpace(sp.Prompt),
-			Resume: sp.Resume, Fork: sp.Fork, Started: time.Now().UnixMilli(), PID: cmd.Process.Pid},
+			Resume: sp.Resume, Fork: sp.Fork, Title: sp.Title, Started: time.Now().UnixMilli(), PID: cmd.Process.Pid},
 		cmd: cmd, f: f, subs: map[chan []byte]struct{}{}, ring: ring{max: scrollbackMax},
 	}
 	if sp.Resume != "" && !sp.Fork {

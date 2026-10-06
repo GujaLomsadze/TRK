@@ -352,6 +352,7 @@ dialog.agents.resizing .ag-term { pointer-events: none; }
 .ag-term { flex: 1; min-height: 0; background: var(--bg); border: 1px solid var(--rule-soft); padding: 6px; }
 .ag-form { display: grid; gap: 8px; max-width: 640px; }
 .ag-from { font-size: 12px; color: var(--ok); }
+.ag-opt { text-transform: none; letter-spacing: 0; color: var(--cell-off); }
 .ag-lab { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px; }
 .ag-form input, .ag-form textarea { background: var(--bg); color: var(--text); border: 1px solid var(--border); font: 14px var(--font-read); padding: 10px 12px; border-radius: var(--radius); width: 100%; }
 .ag-form textarea { min-height: 90px; resize: vertical; }
