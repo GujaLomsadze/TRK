@@ -318,7 +318,10 @@ dialog.agents.resizing .ag-term { pointer-events: none; }
 .ag-head { display: flex; align-items: center; gap: 10px 12px; padding: 12px 14px; border-bottom: 1px solid var(--rule-soft); flex-wrap: wrap;
   padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
 .ag-head .drawer-title { min-width: 0; flex: 1; }
-.ag-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.ag-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ag-font { display: flex; align-items: center; gap: 2px; }
+.ag-font .btn { min-width: 40px; justify-content: center; padding: 0 8px; }
+.ag-font-n { font: 12px var(--font-read); color: var(--muted); min-width: 4.5ch; text-align: center; cursor: default; user-select: none; font-variant-numeric: tabular-nums; }
 .ag-tabs { display: flex; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--rule-soft); overflow-x: auto; flex: none; }
 .ag-tab-wrap { position: relative; flex: none; max-width: 240px; }
 .ag-tab { display: grid; gap: 2px; text-align: left; background: transparent; border: 1px solid var(--rule-soft); color: var(--text); width: 100%;

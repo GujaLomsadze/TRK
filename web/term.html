@@ -20,6 +20,11 @@
   <h1 class="title" id="name">TRK.EXE</h1>
   <span class="meta one" id="where"></span>
   <span class="meta" id="state"></span>
+  <div class="ag-font" id="font" role="group" aria-label="Terminal font size">
+    <button class="btn btn-secondary" type="button" data-font="-1" aria-label="Smaller terminal text" title="Smaller text">A−</button>
+    <span class="ag-font-n" data-font-n title="Terminal font size · double-click to reset">14px</span>
+    <button class="btn btn-secondary" type="button" data-font="1" aria-label="Larger terminal text" title="Larger text">A+</button>
+  </div>
   <button class="btn btn-secondary" id="stop" type="button">Stop claude</button>
 </div>
 <div id="term"></div>
@@ -35,7 +40,7 @@
   const $ = (x) => document.getElementById(x);
   const list = await fetch("/v1/terms").then((r) => r.json()).catch(() => ({ terminals: [] }));
   const t = (list.terminals || []).find((x) => x.id === id);
-  if (!t) { $("state").textContent = "This agent is gone (stopped, or TRK restarted)."; $("stop").hidden = true; return; }
+  if (!t) { $("state").textContent = "This agent is gone (stopped, or TRK restarted)."; $("stop").hidden = $("font").hidden = true; return; }
   document.title = "TRK · " + t.name;
   $("name").textContent = t.name;
   $("where").textContent = t.dir;
@@ -44,6 +49,7 @@
     onExit: () => { $("state").textContent = "claude exited"; $("stop").textContent = "Remove"; },
   });
   v.focus();
+  TRKTerm.fontControl($("font"));
   $("stop").addEventListener("click", async () => {
     if ($("stop").textContent !== "Remove" && !confirm("Stop claude in " + t.name + "?")) return;
     v.dispose();

@@ -63,6 +63,7 @@ window.TRKAgents = (function () {
   function drawActions() {
     const t = find(selected), s = selected.startsWith("s:") ? session(selected.slice(2)) : null;
     $("ag-pop").hidden = !t || t.exited;
+    $("ag-font").hidden = !t || popped.has(t.id);
     $("ag-stop").hidden = !t;
     $("ag-stop").textContent = t && t.exited ? "Remove" : "Stop claude";
     $("ag-resume").hidden = !(t && t.exited && resumable(t.session_id) && enabled());
@@ -278,6 +279,7 @@ window.TRKAgents = (function () {
     terms = terms.filter((x) => x.id !== t.id);
     show("new");
   });
+  TRKTerm.fontControl($("ag-font"));
   $("ag-close").addEventListener("click", () => dlg.close());
   dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); }); // backdrop
   dlg.addEventListener("close", dropViewer); // closing never stops an agent
