@@ -123,9 +123,10 @@ func TestCardWidgets(t *testing.T) {
 	}
 }
 
-// Experimental terminals: off unless switched on in the drawer, xterm.js served locally
-// (no CDN), and the modal never keeps more than the visible terminal connected.
-func TestExperimentalTerminalsWiring(t *testing.T) {
+// Terminals: off unless switched on in the layout drawer, xterm.js served locally (no CDN),
+// the agent drawer never keeps more than the visible terminal connected, cards open it,
+// and its width can be dragged.
+func TestTerminalsWiring(t *testing.T) {
 	idx, _ := os.ReadFile("index.html")
 	for _, w := range []string{`id="agent-open"`, `hidden>+ Agent`, `src="vendor/xterm.js"`, `src="term.js"`, `src="agents.js"`, `id="agents"`} {
 		if !strings.Contains(string(idx), w) {
@@ -139,11 +140,18 @@ func TestExperimentalTerminalsWiring(t *testing.T) {
 		}
 	}
 	ed, _ := os.ReadFile("editor.js")
-	if !strings.Contains(string(ed), `experimental_terminals: on`) {
-		t.Error("drawer has no Experimental switch")
+	if !strings.Contains(string(ed), `terminals_enabled: on`) {
+		t.Error("layout drawer has no Terminals switch")
 	}
 	ag, _ := os.ReadFile("agents.js")
 	if !strings.Contains(string(ag), "function dropViewer()") || !strings.Contains(string(ag), `dlg.addEventListener("close", dropViewer)`) {
 		t.Error("agents.js must drop the viewer's websocket on switch and close")
+	}
+	if !strings.Contains(string(idx), `id="ag-grip"`) || !strings.Contains(string(ag), `grip.addEventListener("pointerdown"`) {
+		t.Error("agent drawer is not resizable")
+	}
+	app, _ := os.ReadFile("app.js")
+	if !strings.Contains(string(app), "TRKAgents.openSession(") {
+		t.Error("cards do not open the agent drawer")
 	}
 }

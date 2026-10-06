@@ -43,9 +43,9 @@ func stopCmd(stdout, stderr io.Writer) int {
 
 func agentsGone(n int) string {
 	if n == 1 {
-		return "1 agent started from the dashboard was stopped with it"
+		return "1 agent started from the dashboard was stopped with it; resume it from its card"
 	}
-	return fmt.Sprintf("%d agents started from the dashboard were stopped with it", n)
+	return fmt.Sprintf("%d agents started from the dashboard were stopped with it; resume them from their cards", n)
 }
 
 // resume clears the pause so the daemon can run and agents report again.

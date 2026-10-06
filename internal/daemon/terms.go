@@ -6,30 +6,80 @@ import (
 	"net/http"
 
 	"github.com/GujaLomsadze/trk/internal/fleet"
+	"github.com/GujaLomsadze/trk/internal/ptree"
 	"github.com/GujaLomsadze/trk/internal/term"
 	"github.com/gorilla/websocket"
 )
 
-// Experimental: agents started from the dashboard, each running in a pty owned by the
-// daemon. Off unless the user turns it on in the Card layout drawer (stored server-side,
-// so a page can't enable it for itself). The same Host/Origin guard as every route applies.
+// Agents started from the dashboard, each running in a pty owned by the daemon. Off
+// unless the user turns it on in the Card layout drawer (stored server-side, so a page
+// can't enable it for itself). The same Host/Origin guard as every route applies.
 
+// settingTerminals keeps the key from when terminals were experimental, so the choice survives.
 const settingTerminals = "experimental_terminals"
 
-// dashView is the dashboard snapshot: the fleet plus the experimental terminal state.
+// dashView is the dashboard snapshot: the fleet plus the terminal state.
 type dashView struct {
 	fleet.View
-	ExperimentalTerminals bool        `json:"experimental_terminals"`
-	TerminalsSupported    bool        `json:"terminals_supported"`
-	Terminals             []term.Info `json:"terminals"`
+	TerminalsEnabled   bool        `json:"terminals_enabled"`
+	TerminalsSupported bool        `json:"terminals_supported"`
+	Terminals          []term.Info `json:"terminals"`
+	// Running holds every session whose claude process is alive, mapped to the TRK
+	// terminal it runs in, or "" when it runs somewhere else (a terminal tab, an IDE).
+	Running map[string]string `json:"running"`
 }
 
 func (s *Server) dash() dashView {
-	return dashView{View: s.fl.View(s.now()), ExperimentalTerminals: s.termsOn.Load(),
-		TerminalsSupported: term.Supported, Terminals: s.terms.List()}
+	v := s.fl.View(s.now())
+	shown := make(map[string]bool, len(v.Sessions))
+	for _, sv := range v.Sessions {
+		shown[sv.SessionID] = true
+	}
+	running := s.linkSessions(shown) // before List, so the terminals carry their session
+	return dashView{View: v, TerminalsEnabled: s.termsOn.Load(),
+		TerminalsSupported: term.Supported, Terminals: s.terms.List(), Running: running}
 }
 
-// SetTerminals turns the experimental terminals on or off (Run restores it from the store).
+// linkSessions finds the sessions whose claude is still running and links each TRK
+// terminal to the session inside it (a claude process at or below the terminal's pid).
+// only, when not nil, limits the check to those sessions: the pid map keeps every
+// session ever seen, and the snapshot is rebuilt several times a second.
+func (s *Server) linkSessions(only map[string]bool) map[string]string {
+	out := map[string]string{}
+	pids := s.fl.ClaudePIDs()
+	if len(pids) == 0 {
+		return out
+	}
+	var live []term.Info
+	for _, t := range s.terms.List() {
+		if !t.Exited {
+			live = append(live, t)
+		}
+	}
+	tb := ptree.Snapshot()
+	for pid, sid := range pids {
+		if only != nil && !only[sid] {
+			continue
+		}
+		if !tb.IsClaude(pid) {
+			continue // exited, or the pid now belongs to something else
+		}
+		owner := ""
+		for _, t := range live {
+			if tb.Descends(pid, t.PID) {
+				owner = t.ID
+				s.terms.Link(t.ID, sid)
+				break
+			}
+		}
+		if prev, seen := out[sid]; !seen || prev == "" {
+			out[sid] = owner
+		}
+	}
+	return out
+}
+
+// SetTerminals turns the terminals on or off (Run restores it from the store).
 func (s *Server) SetTerminals(on bool) { s.termsOn.Store(on); s.dirty.Store(true) }
 
 // CloseTerminals kills every dashboard-started agent; Run calls it on shutdown.
@@ -41,13 +91,24 @@ func (s *Server) listTerms(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) startTerm(w http.ResponseWriter, r *http.Request) {
 	if !s.termsOn.Load() {
-		http.Error(w, "experimental terminals are off (⚙ Card layout → Experimental)", http.StatusForbidden)
+		http.Error(w, "terminals are off (⚙ Card layout → Terminals)", http.StatusForbidden)
 		return
 	}
 	var sp term.Spec
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&sp); err != nil {
 		http.Error(w, "bad json", http.StatusBadRequest)
 		return
+	}
+	// Two claudes on one conversation would both append to its transcript.
+	if sp.Resume != "" && !sp.Fork {
+		if where, ok := s.linkSessions(map[string]bool{sp.Resume: true})[sp.Resume]; ok {
+			msg := "that session is still running in another terminal: stop claude there first, or fork it"
+			if where != "" {
+				msg = "that session is already running in a TRK terminal"
+			}
+			http.Error(w, msg, http.StatusConflict)
+			return
+		}
 	}
 	t, err := s.terms.Start(sp)
 	if errors.Is(err, term.ErrUnsupported) {
@@ -58,7 +119,10 @@ func (s *Server) startTerm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.log.Printf("terminal %s: %s in %s (pid %d)", t.Info().ID, s.terms.Command, t.Info().Dir, t.Info().PID)
+	s.log.Printf("terminal %s: %s %v in %s (pid %d)", t.Info().ID, s.terms.Command, sp.Resume, t.Info().Dir, t.Info().PID)
+	if sp.Resume != "" && !sp.Fork {
+		s.terms.DropExited(sp.Resume, t.Info().ID) // the resumed terminal replaces the one that ended
+	}
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, t.Info())
 }

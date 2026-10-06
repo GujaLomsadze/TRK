@@ -30,7 +30,28 @@ func TestParseStat(t *testing.T) {
 	if !ok || p.PPID != 77 || p.Name != "tmux: server (x)" {
 		t.Fatalf("parseStat = %+v %v", p, ok)
 	}
+	if z, _ := parseStat([]byte("55 (claude) Z 1 55 55 0 -1")); !z.Zombie {
+		t.Fatal("zombie state not parsed")
+	}
 	if _, ok := parseStat([]byte("garbage")); ok {
 		t.Fatal("garbage parsed")
+	}
+}
+
+func TestTable(t *testing.T) {
+	table := map[int]proc{
+		100: {PPID: 1, Name: "trk"},
+		200: {PPID: 100, Name: "claude"},
+		300: {PPID: 200, Name: "zsh"},
+		400: {PPID: 1, Name: "vim"},
+		500: {PPID: 1, Name: "claude", Zombie: true},
+		900: {PPID: 900, Name: "loop"},
+	}
+	tb := Table{func(pid int) (proc, bool) { p, ok := table[pid]; return p, ok }}
+	if !tb.IsClaude(200) || tb.IsClaude(400) || tb.IsClaude(500) || tb.IsClaude(12345) || tb.IsClaude(1) {
+		t.Fatal("IsClaude wrong")
+	}
+	if !tb.Descends(300, 100) || !tb.Descends(200, 200) || tb.Descends(400, 100) || tb.Descends(900, 1) {
+		t.Fatal("Descends wrong")
 	}
 }

@@ -11,6 +11,7 @@ type proc struct {
 	PPID    int
 	Name    string
 	Cmdline string
+	Zombie  bool // exited, not yet reaped by its parent
 }
 
 func FindClaude(start int) int {
@@ -65,5 +66,34 @@ func parseStat(b []byte) (proc, bool) {
 	if err != nil {
 		return proc{}, false
 	}
-	return proc{PPID: ppid, Name: s[l+1 : r]}, true
+	return proc{PPID: ppid, Name: s[l+1 : r], Zombie: f[0] == "Z"}, true
+}
+
+// Table answers several process questions against one snapshot of the process list.
+type Table struct{ lookup func(int) (proc, bool) }
+
+func Snapshot() Table { return Table{snapshot()} }
+
+// IsClaude reports whether pid is a running Claude Code process.
+func (t Table) IsClaude(pid int) bool {
+	if pid <= 1 {
+		return false
+	}
+	p, ok := t.lookup(pid)
+	return ok && !p.Zombie && isClaude(p)
+}
+
+// Descends reports whether ancestor is pid itself or one of its parents.
+func (t Table) Descends(pid, ancestor int) bool {
+	for depth := 0; pid > 1 && depth < 64; depth++ {
+		if pid == ancestor {
+			return true
+		}
+		p, ok := t.lookup(pid)
+		if !ok || p.PPID == pid {
+			return false
+		}
+		pid = p.PPID
+	}
+	return false
 }

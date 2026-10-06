@@ -52,15 +52,18 @@
     <button class="btn btn-secondary" id="layout-reset" type="button">Reset to default</button></div>
 </dialog>
 <dialog class="panel agents" id="agents" aria-labelledby="agents-title">
+  <div class="ag-grip" id="ag-grip" role="separator" aria-orientation="vertical" aria-label="Resize the drawer" tabindex="0" title="Drag to resize · double-click to reset"></div>
   <div class="ag-head">
-    <h2 class="drawer-title" id="agents-title">+ New agent</h2><span class="ag-exp">experimental</span>
+    <h2 class="drawer-title one" id="agents-title">+ New agent</h2>
     <div class="ag-actions">
+      <button class="btn btn-secondary" id="ag-resume" type="button" hidden title="Start claude again on this conversation">↻ Resume</button>
       <button class="btn btn-secondary" id="ag-pop" type="button" hidden title="Move this terminal to its own window">Pop out ↗</button>
       <button class="btn btn-secondary" id="ag-stop" type="button" hidden>Stop claude</button>
       <button class="btn btn-secondary" id="ag-close" type="button" aria-label="Close (agents keep running)" title="Close (agents keep running)">✕</button>
     </div>
   </div>
-  <div class="ag-body"><nav class="ag-tabs" id="ag-tabs" aria-label="agents"></nav><section class="ag-main" id="ag-main"></section></div>
+  <nav class="ag-tabs" id="ag-tabs" aria-label="agents"></nav>
+  <section class="ag-main" id="ag-main"></section>
 </dialog>
 <script src="vendor/xterm.js"></script>
 <script src="vendor/addon-fit.js"></script>

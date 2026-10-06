@@ -1,6 +1,6 @@
 "use strict";
-// Experimental: a viewer for one dashboard-started agent (daemon pty → xterm.js over a
-// websocket). Shared by the New agent modal (index.html) and the pop-out page (term.html).
+// A viewer for one dashboard-started agent (daemon pty → xterm.js over a websocket).
+// Shared by the agent drawer (index.html) and the pop-out page (term.html).
 // Builds DOM with createElement/textContent only, like app.js.
 
 window.TRKTerm = (function () {

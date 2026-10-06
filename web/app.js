@@ -276,13 +276,15 @@ function card(s) {
   const top = s.recent && s.recent[0] ? s.recent[0].tool + s.recent[0].summary : "";
   const fresh = top && lastTop.has(s.session_id) && lastTop.get(s.session_id) !== top;
   lastTop.set(s.session_id, top);
-  return h("article", { class: "panel card st-" + s.status + (s.attention ? " attention" : "") },
+  return h("article", { class: "panel card st-" + s.status + (s.attention ? " attention" : ""), "data-open": s.session_id, tabindex: "0",
+    "aria-label": s.name + ", " + label.toLowerCase() + ". Press Enter to open its agent drawer" },
     // ✕ sits left of the name so the status chip keeps the same spot on every card
     h("div", { class: "card-head" },
       s.status === "idle" || s.status === "done"
         ? h("button", { class: "dismiss", type: "button", "data-dismiss": s.session_id, "aria-label": "Hide " + s.name, title: "Hide this card (it comes back if the session gets busy again)" }, "✕")
         : null,
-      h("div", { class: "head-text" }, h("h3", { class: "card-name one", title: s.name }, s.name), h("div", { class: "meta one", title: where }, where || DASH)),
+      h("div", { class: "head-text" }, h("h3", { class: "card-name one", title: s.name }, s.name),
+        h("div", { class: "meta one", title: where }, s.in_trk ? h("span", { class: "in-trk", title: "Running in a TRK terminal" }, "⌨ ") : null, where || DASH)),
       h("span", { class: "chip chip-" + tone }, label)),
     layout.slots.filter((x) => x.on).map((x) => RENDER[x.id](s, fresh)),
     layout.footer.length ? h("footer", { class: "card-foot" }, layout.footer.map((k) => FOOT[k](s))) : null);
@@ -301,8 +303,12 @@ function renderGrid(v) {
   }
   grid.querySelector(".empty")?.remove();
   const seen = new Set();
+  // sessions in a live TRK terminal: linked by pid (running) or started with --resume (terminals)
+  const inTRK = new Set(Object.entries(v.running || {}).filter(([, t]) => t).map(([sid]) => sid));
+  for (const t of v.terminals || []) if (!t.exited && t.session_id) inTRK.add(t.session_id);
   v.sessions.forEach((s, i) => {
     seen.add(s.session_id);
+    if (inTRK.has(s.session_id)) s = { ...s, in_trk: true };
     const sig = JSON.stringify(s);
     let c = cards.get(s.session_id);
     if (!c || c.sig !== sig) {
@@ -385,9 +391,20 @@ function setConn(live) {
 }
 
 // ✕ on idle/done cards: the daemon hides the session until it shows new activity.
+// Anywhere else on a card opens its agent drawer (unless the click ended a text selection).
+$("grid").addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-open]") && window.TRKAgents) {
+    e.preventDefault();
+    TRKAgents.openSession(e.target.dataset.open);
+  }
+});
 $("grid").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-dismiss]");
-  if (!b) return;
+  if (!b) {
+    const c = e.target.closest("[data-open]");
+    if (c && window.TRKAgents && !String(getSelection())) TRKAgents.openSession(c.dataset.open);
+    return;
+  }
   b.disabled = true;
   try { await fetch("/v1/sessions/" + encodeURIComponent(b.dataset.dismiss) + "/dismiss", { method: "POST" }); }
   catch { b.disabled = false; }
@@ -396,7 +413,7 @@ $("grid").addEventListener("click", async (e) => {
 let stopped = false;
 $("power").addEventListener("click", async () => {
   const own = window.TRKAgents ? TRKAgents.running() : 0;
-  const warn = own ? `\n\n${own} agent${own === 1 ? "" : "s"} started from the dashboard will be stopped.` : "";
+  const warn = own ? `\n\n${own} agent${own === 1 ? "" : "s"} started from the dashboard will be stopped (resume them later from their cards).` : "";
   if (!confirm("Stop TRK?\n\nClaude keeps working; nothing is recorded until you run `trk open`." + warn)) return;
   try { await fetch("/v1/stop", { method: "POST" }); } catch { /* daemon may close the connection as it exits */ }
   stopped = true;

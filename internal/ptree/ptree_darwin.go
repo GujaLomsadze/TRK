@@ -8,6 +8,6 @@ func snapshot() func(int) (proc, bool) {
 		if err != nil || kp.Proc.P_pid == 0 {
 			return proc{}, false
 		}
-		return proc{PPID: int(kp.Eproc.Ppid), Name: unix.ByteSliceToString(kp.Proc.P_comm[:])}, true
+		return proc{PPID: int(kp.Eproc.Ppid), Name: unix.ByteSliceToString(kp.Proc.P_comm[:]), Zombie: kp.Proc.P_stat == 5}, true // 5 = SZOMB
 	}
 }

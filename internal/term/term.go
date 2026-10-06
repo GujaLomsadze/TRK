@@ -1,40 +1,56 @@
-// Package term runs agents in pseudo-terminals for the dashboard's experimental
-// "New agent" feature: each terminal is a `claude` process on a pty whose output is
-// kept in a capped scrollback and fanned out to any number of attached viewers.
+// Package term runs agents in pseudo-terminals for the dashboard's agent drawer: each
+// terminal is a `claude` process on a pty whose output is kept in a capped scrollback
+// and fanned out to any number of attached viewers.
 package term
 
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 )
 
-const scrollbackMax = 256 << 10 // bytes replayed to a viewer that attaches late
+const (
+	scrollbackMax = 256 << 10 // bytes replayed to a viewer that attaches late
+	MaxRunning    = 16        // live terminals at once; each one is a whole claude
+)
 
 // ErrUnsupported: this platform has no pty support (native Windows).
 var ErrUnsupported = errors.New("terminals are not supported on this platform")
 
+// Spec says what to run. Resume continues an existing conversation by session id;
+// Fork (with Resume) continues a copy of it under a new id, leaving the original alone.
 type Spec struct {
 	Dir    string `json:"dir"`
 	Prompt string `json:"prompt"`
+	Resume string `json:"resume,omitempty"`
+	Fork   bool   `json:"fork,omitempty"`
 }
+
+var sessionID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
 
 // Info is what the dashboard lists.
 type Info struct {
-	ID      string `json:"id"`
-	Dir     string `json:"dir"`
-	Name    string `json:"name"`
-	Prompt  string `json:"prompt,omitempty"`
-	Started int64  `json:"started"` // unix ms
-	PID     int    `json:"pid"`
-	Exited  bool   `json:"exited"`
+	ID     string `json:"id"`
+	Dir    string `json:"dir"`
+	Name   string `json:"name"`
+	Prompt string `json:"prompt,omitempty"`
+	Resume string `json:"resume,omitempty"` // session id it was started to resume or fork
+	Fork   bool   `json:"fork,omitempty"`
+	// SessionID is the Claude session running in it, once its hooks have reported one
+	// (the daemon links it by process id). Kept after the process exits.
+	SessionID string `json:"session_id,omitempty"`
+	Started   int64  `json:"started"` // unix ms
+	PID       int    `json:"pid"`
+	Exited    bool   `json:"exited"`
 }
 
 type Manager struct {
@@ -54,17 +70,32 @@ func (m *Manager) Start(sp Spec) (*Term, error) {
 	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 		return nil, errors.New("folder does not exist")
 	}
+	if sp.Resume != "" && !sessionID.MatchString(sp.Resume) {
+		return nil, errors.New("bad session id")
+	}
+	if sp.Fork && sp.Resume == "" {
+		return nil, errors.New("fork needs a session to fork")
+	}
+	if m.Running() >= MaxRunning {
+		return nil, fmt.Errorf("%d agents are already running in TRK; stop one first", MaxRunning)
+	}
 	cmd := exec.Command(m.Command, args(sp)...)
 	cmd.Dir = dir
 	cmd.Env = append(CleanEnv(), "TERM=xterm-256color", "COLORTERM=truecolor")
 	f, err := startPty(cmd, 120, 32)
+	if errors.Is(err, exec.ErrNotFound) {
+		return nil, fmt.Errorf("%s is not on TRK's PATH; start TRK from a shell where `%s` works (trk stop, then trk open)", m.Command, m.Command)
+	}
 	if err != nil {
 		return nil, err
 	}
 	t := &Term{
 		info: Info{ID: newID(), Dir: dir, Name: filepath.Base(dir), Prompt: strings.TrimSpace(sp.Prompt),
-			Started: time.Now().UnixMilli(), PID: cmd.Process.Pid},
+			Resume: sp.Resume, Fork: sp.Fork, Started: time.Now().UnixMilli(), PID: cmd.Process.Pid},
 		cmd: cmd, f: f, subs: map[chan []byte]struct{}{}, ring: ring{max: scrollbackMax},
+	}
+	if sp.Resume != "" && !sp.Fork {
+		t.info.SessionID = sp.Resume // a fork gets its new id from its first hook event
 	}
 	m.mu.Lock()
 	m.terms[t.info.ID] = t
@@ -74,12 +105,34 @@ func (m *Manager) Start(sp Spec) (*Term, error) {
 	return t, nil
 }
 
-// args passes the first prompt to claude as a single argv entry (no shell involved).
+// args builds claude's argv (no shell involved); the first prompt is a single entry.
 func args(sp Spec) []string {
-	if p := strings.TrimSpace(sp.Prompt); p != "" {
-		return []string{p}
+	var a []string
+	if sp.Resume != "" {
+		a = append(a, "--resume", sp.Resume)
+		if sp.Fork {
+			a = append(a, "--fork-session")
+		}
 	}
-	return nil
+	if p := strings.TrimSpace(sp.Prompt); p != "" {
+		a = append(a, p)
+	}
+	return a
+}
+
+// Link records which Claude session runs in terminal id. It reports whether that changed.
+func (m *Manager) Link(id, sessionID string) bool {
+	t, ok := m.Get(id)
+	if !ok || sessionID == "" {
+		return false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.info.SessionID == sessionID {
+		return false
+	}
+	t.info.SessionID = sessionID
+	return true
 }
 
 func (m *Manager) Get(id string) (*Term, bool) {
@@ -124,6 +177,22 @@ func (m *Manager) Stop(id string) error {
 	t.kill()
 	m.changed()
 	return nil
+}
+
+// DropExited forgets exited terminals that ran sessionID, except keep.
+func (m *Manager) DropExited(sessionID, keep string) {
+	m.mu.Lock()
+	n := 0
+	for id, t := range m.terms {
+		if i := t.Info(); id != keep && i.Exited && i.SessionID == sessionID {
+			delete(m.terms, id)
+			n++
+		}
+	}
+	m.mu.Unlock()
+	if n > 0 {
+		m.changed()
+	}
 }
 
 // Close kills every terminal; the daemon calls it on shutdown.

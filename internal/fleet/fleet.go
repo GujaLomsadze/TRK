@@ -70,6 +70,17 @@ func (f *Fleet) Restore(sessions []model.Session, acct model.Account) {
 	f.account = acct
 }
 
+// ClaudePIDs returns a copy of the known Claude pid → session mappings.
+func (f *Fleet) ClaudePIDs() map[int]string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[int]string, len(f.pids))
+	for pid, sid := range f.pids {
+		out[pid] = sid
+	}
+	return out
+}
+
 // RestorePIDs reloads persisted Claude pid → session mappings after a restart.
 func (f *Fleet) RestorePIDs(m map[int]string) {
 	f.mu.Lock()

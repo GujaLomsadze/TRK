@@ -115,6 +115,55 @@ func TestArgsPassPromptAsOneArgument(t *testing.T) {
 	}
 }
 
+func TestArgsResumeAndFork(t *testing.T) {
+	id := "7f3a9c2e-51d0-4b8e-9e0a-2c6f1d4b88a1"
+	if got := args(Spec{Resume: id}); !slices.Equal(got, []string{"--resume", id}) {
+		t.Fatalf("resume args = %q", got)
+	}
+	if got := args(Spec{Resume: id, Fork: true, Prompt: "go on"}); !slices.Equal(got, []string{"--resume", id, "--fork-session", "go on"}) {
+		t.Fatalf("fork args = %q", got)
+	}
+}
+
+func TestStartValidatesResume(t *testing.T) {
+	m := newTestManager("cat")
+	t.Cleanup(m.Close)
+	dir := t.TempDir()
+	for _, sp := range []Spec{{Dir: dir, Resume: "--dangerously-skip-permissions"}, {Dir: dir, Resume: "a b"}, {Dir: dir, Fork: true}} {
+		if _, err := m.Start(sp); err == nil {
+			t.Errorf("spec %+v accepted", sp)
+		}
+	}
+	tm, err := m.Start(Spec{Dir: dir, Resume: "abc-123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tm.Info().SessionID != "abc-123" {
+		t.Fatalf("resumed terminal not linked: %+v", tm.Info())
+	}
+	if !m.Link(tm.Info().ID, "def-456") || m.Link(tm.Info().ID, "def-456") || tm.Info().SessionID != "def-456" {
+		t.Fatal("Link did not update once")
+	}
+}
+
+func TestStartLimitAndMissingCommand(t *testing.T) {
+	m := newTestManager("cat")
+	t.Cleanup(m.Close)
+	dir := t.TempDir()
+	for i := 0; i < MaxRunning; i++ {
+		if _, err := m.Start(Spec{Dir: dir}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := m.Start(Spec{Dir: dir}); err == nil || !strings.Contains(err.Error(), "already running") {
+		t.Fatalf("over the limit: %v", err)
+	}
+	m2 := newTestManager("trk-no-such-command-xyz")
+	if _, err := m2.Start(Spec{Dir: dir}); err == nil || !strings.Contains(err.Error(), "PATH") {
+		t.Fatalf("missing command: %v", err)
+	}
+}
+
 // The daemon is usually spawned from inside a Claude session; the child must not
 // inherit that session's identity or it runs as a sub-agent without a transcript.
 func TestCleanEnvDropsParentClaudeSession(t *testing.T) {

@@ -31,7 +31,7 @@ type Server struct {
 	log     *log.Logger
 	now     func() int64
 	dirty   atomic.Bool
-	terms   *term.Manager // experimental: dashboard-started agents
+	terms   *term.Manager // dashboard-started agents
 	termsOn atomic.Bool
 	// OnShutdown stops the daemon; set by Run. Used by `trk update` to restart into the new binary.
 	OnShutdown func()
@@ -180,13 +180,13 @@ const maxHideAfterMin = 30 * 24 * 60
 
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		HideAfterMin          *int  `json:"hide_after_min"`
-		ExperimentalTerminals *bool `json:"experimental_terminals"`
+		HideAfterMin     *int  `json:"hide_after_min"`
+		TerminalsEnabled *bool `json:"terminals_enabled"`
 	}
 	err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body)
 	badHide := body.HideAfterMin != nil && (*body.HideAfterMin < 0 || *body.HideAfterMin > maxHideAfterMin)
-	if err != nil || badHide || (body.HideAfterMin == nil && body.ExperimentalTerminals == nil) {
-		http.Error(w, "want {\"hide_after_min\": 0..43200} (0 = never) and/or {\"experimental_terminals\": bool}", http.StatusBadRequest)
+	if err != nil || badHide || (body.HideAfterMin == nil && body.TerminalsEnabled == nil) {
+		http.Error(w, "want {\"hide_after_min\": 0..43200} (0 = never) and/or {\"terminals_enabled\": bool}", http.StatusBadRequest)
 		return
 	}
 	if body.HideAfterMin != nil {
@@ -196,7 +196,7 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 			s.log.Printf("save setting: %v", err)
 		}
 	}
-	if on := body.ExperimentalTerminals; on != nil {
+	if on := body.TerminalsEnabled; on != nil {
 		s.SetTerminals(*on)
 		if err := s.st.SetSetting(settingTerminals, strconv.FormatBool(*on)); err != nil {
 			s.log.Printf("save setting: %v", err)

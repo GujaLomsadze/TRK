@@ -5,7 +5,11 @@ package daemon
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +26,7 @@ func postJSON(t *testing.T, url, body string) *http.Response {
 	return resp
 }
 
-func TestExperimentalTerminals(t *testing.T) {
+func TestTerminals(t *testing.T) {
 	ts, srv := newTestServer(t)
 	srv.terms.Command = "cat"
 	t.Cleanup(srv.CloseTerminals)
@@ -32,11 +36,11 @@ func TestExperimentalTerminals(t *testing.T) {
 	if r := postJSON(t, ts.URL+"/v1/terms", spec); r.StatusCode != http.StatusForbidden {
 		t.Fatalf("start while off = %d, want 403", r.StatusCode)
 	}
-	if r := postJSON(t, ts.URL+"/v1/settings", `{"experimental_terminals":true}`); r.StatusCode != http.StatusNoContent {
+	if r := postJSON(t, ts.URL+"/v1/settings", `{"terminals_enabled":true}`); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("enable = %d", r.StatusCode)
 	}
 	var view struct {
-		On bool `json:"experimental_terminals"`
+		On bool `json:"terminals_enabled"`
 	}
 	getJSON(t, ts.URL+"/v1/sessions", &view)
 	if !view.On {
@@ -100,6 +104,69 @@ func TestExperimentalTerminals(t *testing.T) {
 	for {
 		if _, _, err := c.ReadMessage(); err != nil {
 			break // viewer is disconnected once the agent is stopped
+		}
+	}
+}
+
+// A terminal is linked to the session whose claude runs in it; a session that is still
+// running can be forked but not resumed a second time.
+func TestTerminalLinksSessionAndGuardsResume(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("needs /proc to see the fake claude")
+	}
+	ts, srv := newTestServer(t)
+	t.Cleanup(srv.CloseTerminals)
+	// ptree recognises claude by process name; a script's process is named after the script.
+	// (Not a symlink to cat: multicall coreutils exit when called by an unknown name.)
+	fake := filepath.Join(t.TempDir(), "claude")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nwhile read -r l; do echo \"$l\"; done\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	srv.terms.Command = fake
+	dir := t.TempDir()
+	postJSON(t, ts.URL+"/v1/settings", `{"terminals_enabled":true}`)
+	start := func(extra string) *http.Response {
+		return postJSON(t, ts.URL+"/v1/terms", `{"dir":`+jsonStr(dir)+extra+`}`)
+	}
+	r := start("")
+	var first struct {
+		ID  string
+		PID int
+	}
+	_ = json.NewDecoder(r.Body).Decode(&first)
+	post(t, ts.URL, fmt.Sprintf(`{"source":"hook","claude_pid":%d,"payload":{"session_id":"S-TRK","hook_event_name":"UserPromptSubmit","cwd":%s,"prompt":"hi"}}`, first.PID, jsonStr(dir)), nil)
+
+	var view struct {
+		Running   map[string]string `json:"running"`
+		Terminals []struct {
+			ID        string `json:"id"`
+			SessionID string `json:"session_id"`
+		} `json:"terminals"`
+	}
+	linked := func() bool {
+		getJSON(t, ts.URL+"/v1/sessions", &view)
+		return view.Running["S-TRK"] == first.ID && len(view.Terminals) == 1 && view.Terminals[0].SessionID == "S-TRK"
+	}
+	waitFor(t, linked, "terminal linked to S-TRK") // events are ingested asynchronously
+	if r := start(`,"resume":"S-TRK"`); r.StatusCode != http.StatusConflict {
+		t.Fatalf("resume of a running session = %d, want 409", r.StatusCode)
+	}
+	if r := start(`,"resume":"S-TRK","fork":true`); r.StatusCode != http.StatusCreated {
+		t.Fatalf("fork = %d", r.StatusCode)
+	}
+	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/v1/terms/"+first.ID, nil)
+	if resp, err := http.DefaultClient.Do(req); err != nil || resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("stop: %v", err)
+	}
+	// the killed process may linger for a moment
+	waitFor(t, func() bool { return start(`,"resume":"S-TRK"`).StatusCode == http.StatusCreated }, "resume after stop")
+}
+
+func waitFor(t *testing.T, ok func() bool, what string) {
+	t.Helper()
+	for deadline := time.Now().Add(5 * time.Second); !ok(); time.Sleep(50 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
 		}
 	}
 }
