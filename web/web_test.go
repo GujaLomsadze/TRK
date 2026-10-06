@@ -9,7 +9,7 @@ import (
 )
 
 func TestAssetsEmbedded(t *testing.T) {
-	for _, p := range []string{"index.html", "app.js", "editor.js", "theme.css", "limits.html", "limits.js", "limits.css", "stats.html", "term.html", "term.js", "agents.js", "vendor/xterm.js", "vendor/xterm.css", "vendor/addon-fit.js", "vendor/LICENSE-xterm.txt", "fonts/VT323-Regular.ttf", "fonts/IBMPlexMono-Regular.ttf", "fonts/IBMPlexMono-SemiBold.ttf"} {
+	for _, p := range []string{"index.html", "app.js", "editor.js", "theme.css", "limits.html", "limits.js", "limits.css", "stats.html", "stats.js", "stats.css", "term.html", "term.js", "agents.js", "vendor/xterm.js", "vendor/xterm.css", "vendor/addon-fit.js", "vendor/LICENSE-xterm.txt", "fonts/VT323-Regular.ttf", "fonts/IBMPlexMono-Regular.ttf", "fonts/IBMPlexMono-SemiBold.ttf"} {
 		if _, err := fs.Stat(FS, p); err != nil {
 			t.Errorf("missing %s: %v", p, err)
 		}
@@ -26,15 +26,25 @@ func TestAssetsEmbedded(t *testing.T) {
 			t.Errorf("limits.html lacks %s", ref)
 		}
 	}
-	old, _ := fs.ReadFile(FS, "stats.html") // old bookmarks
-	if !strings.Contains(string(old), `url=limits.html`) {
-		t.Error("stats.html does not forward to limits.html")
+	st, _ := fs.ReadFile(FS, "stats.html")
+	for _, ref := range []string{"theme.css", "stats.css", "stats.js", "TRK.EXE", `href="limits.html"`} {
+		if !strings.Contains(string(st), ref) {
+			t.Errorf("stats.html lacks %s", ref)
+		}
+	}
+	for _, page := range []string{"index.html", "limits.html", "stats.html"} { // every page links all three
+		b, _ := fs.ReadFile(FS, page)
+		for _, ref := range []string{`href="./"`, `href="limits.html"`, `href="stats.html"`} {
+			if !strings.Contains(string(b), ref) {
+				t.Errorf("%s nav lacks %s", page, ref)
+			}
+		}
 	}
 }
 
 // Agent-supplied text must never be parsed as HTML.
 func TestNoInnerHTML(t *testing.T) {
-	for _, f := range []string{"app.js", "editor.js", "limits.js", "term.js", "agents.js", "term.html"} {
+	for _, f := range []string{"app.js", "editor.js", "limits.js", "stats.js", "term.js", "agents.js", "term.html"} {
 		js, _ := os.ReadFile(f)
 		if regexp.MustCompile(`innerHTML|outerHTML|insertAdjacentHTML|document\.write`).Match(js) {
 			t.Fatalf("%s uses an HTML-parsing sink", f)

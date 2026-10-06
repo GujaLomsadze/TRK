@@ -33,6 +33,7 @@ type Server struct {
 	dirty   atomic.Bool
 	terms   *term.Manager // dashboard-started agents
 	termsOn atomic.Bool
+	stats   statsCache
 	// OnShutdown stops the daemon; set by Run. Used by `trk update` to restart into the new binary.
 	OnShutdown func()
 	// OnStop pauses TRK (hooks stop respawning it) and then shuts down; set by Run.
@@ -59,6 +60,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/terms/{id}/ws", s.attachTerm)
 	mux.HandleFunc("GET /v1/account", s.getAccount)
 	mux.HandleFunc("GET /v1/limits/history", s.getLimitHistory)
+	mux.HandleFunc("GET /v1/stats", s.getStats)
 	mux.HandleFunc("GET /v1/stream", s.stream)
 	mux.HandleFunc("GET /healthz", s.healthz)
 	mux.HandleFunc("POST /v1/shutdown", s.shutdown)

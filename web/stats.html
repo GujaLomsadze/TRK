@@ -3,10 +3,91 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TRK.EXE · Limits</title>
-<!-- The plan-usage page moved to limits.html; this keeps old links working until a real Stats page lands here. -->
-<meta http-equiv="refresh" content="0; url=limits.html">
+<title>TRK.EXE · Stats</title>
 <link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="stats.css">
 </head>
-<body><p class="muted">Moved to <a href="limits.html" style="color:var(--chip-accent-fg)">limits.html</a>.</p></body>
+<body>
+<header class="hdr panel">
+  <div class="brand">
+    <h1 class="title">TRK.EXE</h1>
+    <div class="sub">fleet monitor · <span id="host"></span> <span id="state" class="conn">○ loading</span></div>
+  </div>
+  <nav class="nav" aria-label="views">
+    <a class="btn btn-secondary" href="./">Fleet</a>
+    <a class="btn btn-secondary" href="limits.html">Limits</a>
+    <a class="btn btn-secondary active" href="stats.html" aria-current="page">Stats</a>
+  </nav>
+</header>
+
+<div class="st-filters">
+  <span class="st-lab">Range</span>
+  <div class="st-seg" id="range" role="group" aria-label="range">
+    <button type="button" data-r="1" aria-pressed="false">Today</button>
+    <button type="button" data-r="7" aria-pressed="true">7 days</button>
+    <button type="button" data-r="30" aria-pressed="false">30 days</button>
+  </div>
+  <span class="st-lab">Repos</span>
+  <div class="st-chips" id="repos" role="group" aria-label="repos"></div>
+</div>
+
+<section class="st-kpis" id="kpis" aria-label="headline numbers"></section>
+
+<main class="st-grid">
+  <section class="panel st-card st-wide">
+    <div class="st-head"><h2>Spend per day</h2><span class="st-q">Where does the money go?</span></div>
+    <div id="spend"></div>
+    <div class="st-legend" id="spend-legend"></div>
+  </section>
+
+  <section class="panel st-card">
+    <div class="st-head"><h2>Where the time goes</h2><span class="st-q">Busy model, busy tools, or waiting on you?</span></div>
+    <div class="st-legend"><span><i class="st-sw" style="background:var(--t-model)"></i>model working</span><span><i class="st-sw" style="background:var(--t-tools)"></i>tools running</span><span><i class="st-sw" style="background:var(--t-wait)"></i>waiting on you</span></div>
+    <div class="st-split" id="split"></div>
+  </section>
+
+  <section class="panel st-card">
+    <div class="st-head"><h2>Your response time</h2><span class="st-q">How long permission prompts and questions waited for you</span></div>
+    <div id="waits"></div>
+    <div class="st-insight" id="wait-insight" hidden></div>
+  </section>
+
+  <section class="panel st-card">
+    <div class="st-head"><h2>When agents work</h2><span class="st-q">Tool calls by weekday and hour</span></div>
+    <div class="st-heat" id="heat"></div>
+    <div class="st-legend" id="heat-legend"></div>
+  </section>
+
+  <section class="panel st-card">
+    <div class="st-head"><h2>Top tools</h2><span class="st-q">Calls, and how many failed</span></div>
+    <div class="st-legend"><span><i class="st-sw" style="background:var(--accent)"></i>succeeded</span><span><i class="st-sw st-sw-fail"></i>failed</span></div>
+    <div class="st-blist" id="tools"></div>
+  </section>
+
+  <section class="panel st-card st-wide">
+    <div class="st-head"><h2>Slowest commands</h2><span class="st-q">Bash commands by the program that runs (cd, export and trk steps skipped); a chain counts as its first real command</span></div>
+    <div class="st-tbl"><table id="slow"></table></div>
+  </section>
+
+  <section class="panel st-card">
+    <div class="st-head"><h2>Most-touched files</h2><span class="st-q">Read vs edited, and by how many agents</span></div>
+    <div class="st-legend"><span><i class="st-sw" style="background:var(--t-model)"></i>read</span><span><i class="st-sw" style="background:var(--accent)"></i>edited</span></div>
+    <div class="st-blist" id="files"></div>
+  </section>
+
+  <section class="panel st-card">
+    <div class="st-head"><h2>Context pressure</h2><span class="st-q">Fullest context each session reached</span></div>
+    <div id="ctx"></div>
+    <div class="st-insight" id="ctx-insight" hidden></div>
+  </section>
+
+  <section class="panel st-card st-wide">
+    <div class="st-head"><h2>Sessions</h2><span class="st-q">Click a column to sort</span></div>
+    <div class="st-tbl"><table id="sessions"></table></div>
+  </section>
+</main>
+<div class="st-tip" id="tip" hidden></div>
+<div class="scanlines" aria-hidden="true"></div>
+<script src="stats.js"></script>
+</body>
 </html>

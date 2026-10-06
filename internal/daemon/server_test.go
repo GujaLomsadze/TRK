@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -377,6 +378,46 @@ func TestTitleEndpoint(t *testing.T) {
 	for _, sv := range after.Sessions {
 		if sv.SessionID == "A" && (sv.Title != "" || !strings.HasPrefix(sv.Name, "proj")) {
 			t.Fatalf("after clear: %+v", sv)
+		}
+	}
+}
+
+func TestStatsEndpoint(t *testing.T) {
+	ts, _ := newTestServer(t)
+	post(t, ts.URL, `{"source":"statusline","payload":{"session_id":"S","cwd":"/tmp/p","model":{"display_name":"Opus 5.5"},"cost":{"total_cost_usd":1.5,"total_api_duration_ms":2000},"context_window":{"used_percentage":42,"total_input_tokens":900,"total_output_tokens":100}}}`, nil)
+	post(t, ts.URL, `{"source":"hook","payload":{"session_id":"S","cwd":"/tmp/p","hook_event_name":"PreToolUse","tool_name":"Bash","tool_use_id":"b1","tool_input":{"command":"cd /tmp/p && make check"}}}`, nil)
+	post(t, ts.URL, `{"source":"hook","payload":{"session_id":"S","cwd":"/tmp/p","hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"b1","tool_input":{"command":"cd /tmp/p && make check"}}}`, nil)
+	var r struct {
+		KPI struct {
+			Spend, Tokens float64
+			ToolCalls     int `json:"tool_calls"`
+		} `json:"kpi"`
+		Commands []struct{ Cmd string } `json:"commands"`
+		Sessions []struct {
+			ID      string
+			PeakCtx float64 `json:"peak_ctx"`
+		} `json:"sessions"`
+		Days []struct{} `json:"days"`
+	}
+	for deadline := time.Now().Add(3 * time.Second); r.KPI.ToolCalls < 1; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("stats never saw the events: %+v", r)
+		}
+		// a different tz each try skips the 30s cache
+		getJSON(t, ts.URL+"/v1/stats?days=3&tz="+strconv.Itoa(int(time.Now().UnixNano()%600)), &r)
+	}
+	if r.KPI.Spend != 1.5 || r.KPI.Tokens != 1000 || len(r.Days) != 3 || len(r.Commands) != 1 || r.Commands[0].Cmd != "make check" ||
+		len(r.Sessions) != 1 || r.Sessions[0].PeakCtx != 42 {
+		t.Fatalf("stats = %+v", r)
+	}
+	for _, q := range []string{"days=0", "days=91", "days=x", "tz=99999"} {
+		resp, err := http.Get(ts.URL + "/v1/stats?" + q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s = %d, want 400", q, resp.StatusCode)
 		}
 	}
 }
