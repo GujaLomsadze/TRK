@@ -241,7 +241,7 @@ var limitWindows = map[string]struct {
 	"7d": {"seven_day", 7 * 86400_000, 30 * 60_000},
 }
 
-// getLimitHistory serves the readings of the current 5h or 7d window for the Stats page.
+// getLimitHistory serves the readings of the current 5h or 7d window for the Limits page.
 func (s *Server) getLimitHistory(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("window")
 	win, ok := limitWindows[name]

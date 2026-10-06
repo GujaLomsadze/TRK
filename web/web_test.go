@@ -9,28 +9,32 @@ import (
 )
 
 func TestAssetsEmbedded(t *testing.T) {
-	for _, p := range []string{"index.html", "app.js", "editor.js", "theme.css", "stats.html", "stats.js", "stats.css", "term.html", "term.js", "agents.js", "vendor/xterm.js", "vendor/xterm.css", "vendor/addon-fit.js", "vendor/LICENSE-xterm.txt", "fonts/VT323-Regular.ttf", "fonts/IBMPlexMono-Regular.ttf", "fonts/IBMPlexMono-SemiBold.ttf"} {
+	for _, p := range []string{"index.html", "app.js", "editor.js", "theme.css", "limits.html", "limits.js", "limits.css", "stats.html", "term.html", "term.js", "agents.js", "vendor/xterm.js", "vendor/xterm.css", "vendor/addon-fit.js", "vendor/LICENSE-xterm.txt", "fonts/VT323-Regular.ttf", "fonts/IBMPlexMono-Regular.ttf", "fonts/IBMPlexMono-SemiBold.ttf"} {
 		if _, err := fs.Stat(FS, p); err != nil {
 			t.Errorf("missing %s: %v", p, err)
 		}
 	}
 	idx, _ := fs.ReadFile(FS, "index.html")
-	for _, ref := range []string{"theme.css", "app.js", "TRK.EXE", `href="stats.html"`} {
+	for _, ref := range []string{"theme.css", "app.js", "TRK.EXE", `href="limits.html"`} {
 		if !strings.Contains(string(idx), ref) {
 			t.Errorf("index.html lacks %s", ref)
 		}
 	}
-	stats, _ := fs.ReadFile(FS, "stats.html")
-	for _, ref := range []string{"theme.css", "stats.css", "stats.js", "TRK.EXE"} {
-		if !strings.Contains(string(stats), ref) {
-			t.Errorf("stats.html lacks %s", ref)
+	lim, _ := fs.ReadFile(FS, "limits.html")
+	for _, ref := range []string{"theme.css", "limits.css", "limits.js", "TRK.EXE"} {
+		if !strings.Contains(string(lim), ref) {
+			t.Errorf("limits.html lacks %s", ref)
 		}
+	}
+	old, _ := fs.ReadFile(FS, "stats.html") // old bookmarks
+	if !strings.Contains(string(old), `url=limits.html`) {
+		t.Error("stats.html does not forward to limits.html")
 	}
 }
 
 // Agent-supplied text must never be parsed as HTML.
 func TestNoInnerHTML(t *testing.T) {
-	for _, f := range []string{"app.js", "editor.js", "stats.js", "term.js", "agents.js", "term.html"} {
+	for _, f := range []string{"app.js", "editor.js", "limits.js", "term.js", "agents.js", "term.html"} {
 		js, _ := os.ReadFile(f)
 		if regexp.MustCompile(`innerHTML|outerHTML|insertAdjacentHTML|document\.write`).Match(js) {
 			t.Fatalf("%s uses an HTML-parsing sink", f)
@@ -84,10 +88,10 @@ func TestStepCountBesideBar(t *testing.T) {
 }
 
 // Each page holds one /v1/stream. A page parked in the back/forward cache keeps it open,
-// and HTTP/1.1 allows 6 connections per host: after a few Fleet↔Stats trips the next page
+// and HTTP/1.1 allows 6 connections per host: after a few Fleet↔Limits trips the next page
 // can't load. Both pages must close the stream on pagehide and reopen it on pageshow.
 func TestStreamClosedOnPagehide(t *testing.T) {
-	for _, f := range []string{"app.js", "stats.js"} {
+	for _, f := range []string{"app.js", "limits.js"} {
 		js, _ := os.ReadFile(f)
 		for _, want := range []string{`addEventListener("pagehide"`, `addEventListener("pageshow"`, "es.close()"} {
 			if !strings.Contains(string(js), want) {

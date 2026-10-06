@@ -1,5 +1,5 @@
 "use strict";
-// TRK Stats page: plan-usage history (5h and weekly) with an "at this pace" projection.
+// TRK Limits page: plan-usage history (5h and weekly) with an "at this pace" projection.
 // Builds DOM with createElement/textContent only, like app.js.
 
 const MIN = 60e3, HOUR = 60 * MIN, DAY = 24 * HOUR;
@@ -313,7 +313,7 @@ function connect() {
   es.onerror = () => setConn(false); // EventSource reconnects by itself
 }
 // A page parked in the back/forward cache keeps its stream open, and the browser allows only
-// 6 connections per host: a few Fleet/Stats trips would leave the next page unable to load.
+// 6 connections per host: a few Fleet/Limits trips would leave the next page unable to load.
 addEventListener("pagehide", () => { if (es) { es.close(); es = null; } });
 addEventListener("pageshow", (e) => {
   if (!e.persisted || es) return;

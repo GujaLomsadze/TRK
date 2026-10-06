@@ -436,7 +436,7 @@ function connect() {
   es.onerror = () => { setConn(false); if (stopped) es.close(); }; // EventSource reconnects by itself
 }
 // A page parked in the back/forward cache keeps its stream open, and the browser allows only
-// 6 connections per host: a few Fleet/Stats trips would leave the next page unable to load.
+// 6 connections per host: a few Fleet/Limits trips would leave the next page unable to load.
 addEventListener("pagehide", () => { if (es) { es.close(); es = null; } });
 addEventListener("pageshow", (e) => { if (e.persisted && !es && !stopped) connect(); });
 
