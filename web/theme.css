@@ -93,6 +93,11 @@ ul { list-style: none; margin: 0; padding: 0; }
 .card-head .chip { flex: none; min-width: 9ch; text-align: center; } /* same width for DONE / IDLE / WORKING */
 .chip-accent { background: var(--chip-accent-bg); color: var(--chip-accent-fg); }
 .chip-work { background: rgba(241,220,214,0.08); color: var(--work); text-shadow: 0 0 8px rgba(241,220,214,0.55); }
+/* WORKING shimmer (picked "D", 2026-10-06): a bright band sweeps through the ice-white letters */
+.chip-work .shine { background: linear-gradient(90deg, rgba(241,220,214,0.55) 0 40%, #fff 50%, rgba(241,220,214,0.55) 60% 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2.2s linear infinite; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+@media (prefers-reduced-motion: reduce) { .chip-work .shine { background: none; color: var(--work); } }
 .chip-ok { background: rgba(92,255,157,0.10); color: var(--ok); text-shadow: 0 0 8px rgba(92,255,157,0.7); }
 .chip-red { background: rgba(255,74,61,0.12); color: var(--red); text-shadow: 0 0 8px rgba(255,74,61,0.75); }
 .chip-warn { background: var(--chip-warn-bg); color: var(--chip-warn-fg); }

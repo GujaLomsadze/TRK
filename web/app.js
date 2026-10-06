@@ -285,7 +285,8 @@ function card(s) {
         : null,
       h("div", { class: "head-text" }, h("h3", { class: "card-name one", title: s.name }, s.name),
         h("div", { class: "meta one", title: where }, s.in_trk ? h("span", { class: "in-trk", title: "Running in a TRK terminal" }, "⌨ ") : null, where || DASH)),
-      h("span", { class: "chip chip-" + tone }, label)),
+      // WORKING: light runs through the letters (the text needs its own box for background-clip)
+      h("span", { class: "chip chip-" + tone }, tone === "work" ? h("span", { class: "shine" }, label) : label)),
     layout.slots.filter((x) => x.on).map((x) => RENDER[x.id](s, fresh)),
     layout.footer.length ? h("footer", { class: "card-foot" }, layout.footer.map((k) => FOOT[k](s))) : null);
 }
