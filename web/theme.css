@@ -72,7 +72,8 @@ ul { list-style: none; margin: 0; padding: 0; }
 
 /* layout */
 .layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 16px; margin-bottom: 16px; align-items: start; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+/* auto columns: cards at least 400px wide, so the 20-cell bars and two-line widgets fit at 100% zoom */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr)); gap: 16px; }
 .grid.fixed-cols { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
 .grid.fixed-rows { grid-auto-rows: var(--row-h, auto); }
 .grid.fixed-rows > .card { height: 100%; }
@@ -109,7 +110,7 @@ ul { list-style: none; margin: 0; padding: 0; }
 .tool-ok .mark { color: var(--chip-accent-fg); }
 
 /* context gauge + hints (user bands: 40 yellow, 60 red, hints at 50/70) */
-.ctx { border-top: 1px solid var(--rule-soft); padding-top: 6px; display: grid; gap: 2px; }
+.ctx { border-top: 1px solid var(--rule-soft); padding-top: 6px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; } /* long hints ellipsize, not widen */
 .ctx-line { font-size: 12px; color: var(--muted); }
 .ctx-hint { font-size: 12px; font-weight: 600; }
 .ctx-ok .ctx-line { color: var(--ok); }
@@ -119,7 +120,6 @@ ul { list-style: none; margin: 0; padding: 0; }
 /* per-cell ASCII bars: each cell carries its own colour + glow (set inline) */
 .cellbar { font: 19px/1 var(--font-deco); white-space: pre; }
 .cellbar .off { color: var(--cell-off); }
-.card .cellbar.small { font-size: 16px; }
 
 /* status motion — replaces notifications */
 .card.st-done { border-color: rgba(92,255,157,0.45); animation: bloom 1.6s ease-out 1, breathe 4s ease-in-out 1.6s infinite; }
@@ -195,7 +195,12 @@ body { padding-bottom: calc(var(--dock-h, 160px) + 24px); }
 .slot-step { color: var(--muted); height: 1.5em; }
 .slot-bar { height: 20px; }
 .prog-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.prog-count { font: 19px/1 var(--font-deco); color: var(--muted); white-space: nowrap; }
+.prog-count { font: 19px/1 var(--font-deco); color: var(--muted); white-space: nowrap; flex: none; }
+/* narrow card (fixed columns, small window): shrink the bar's glyphs instead of overflowing.
+   ~30 glyphs on the row ([ + 20 cells + ] + "step n/n") at 0.55em each. */
+.card { container-type: inline-size; }
+.prog-row .cellbar, .prog-row .prog-count { font-size: min(19px, calc((100cqi - 12px) / 16.5)); }
+.card .cellbar.small { font-size: min(16px, calc(100cqi / 13.5)); } /* [ + 20 cells + ], ~0.59em each */
 .slot-reality { height: 46px; }
 .slot-reality .reality { height: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .tools li.blank { color: var(--rule-soft); }
