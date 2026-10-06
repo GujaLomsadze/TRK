@@ -27,6 +27,26 @@ Worried about your Claude setup? Read [How TRK works with Claude Code](#how-trk-
 
 You never need to run `trk serve` yourself: the first `trk` call that finds no daemon starts one in the background.
 
+## The dashboard
+
+Three pages, all at `http://localhost:7777`:
+
+- **Fleet:** one card per agent with its task, progress, status, context gauge, last prompt and reply, files touched and more. Cards glow by status (a pulsing amber card is waiting on you). Click a card to open its [agent drawer](#agents-in-the-dashboard). In the drawer, **✎** gives the card a title of your own. Titles are stored by TRK, so every browser shows them. **⚙ Card layout** picks the widgets, footer stats, grid size and which areas to show (Needs you and Collisions start hidden; the cards' chips already show both).
+- **Limits:** your 5-hour and weekly plan usage, one full-width chart each, with an "at this pace" projection. The verdict says **Perfect pace** within ±5% of the safe pace, **Good pace** with headroom, and **Slow down** only when you'd run out before the reset.
+- **Stats:** history for today, 7 or 30 days, filterable by repo. It shows spend per day by repo; where session time goes (model working, tools running, waiting on you); how long prompts wait for you; a weekday × hour activity grid; top tools with failures; the slowest commands; the most-touched files; how full each session's context got; and a sortable sessions table.
+
+## Agents in the dashboard
+
+TRK can also run Claude for you, in a terminal inside the dashboard. It's off until you turn it on in **⚙ Card layout → Terminals** (not available on native Windows; WSL works).
+
+- **+ Agent** opens the New agent form: a folder, an optional name for its card, and an optional first prompt. Claude runs in a terminal owned by TRK. Closing the drawer keeps it running; **Pop out ↗** moves it to its own window; **A− / A+** sets the terminal's font size.
+- **Click any card** to open its drawer:
+  - running in TRK: its terminal.
+  - running in another terminal (a tab, your editor): **Fork into TRK** continues a copy of the conversation (`claude --resume <id> --fork-session`) and leaves the original alone. **Take over** stays off while that claude runs, so two claudes never write to one conversation.
+  - not running: **Resume** continues it in TRK (`claude --resume <id>`).
+  - always: **New agent here** (fresh claude in the same folder) and **Copy resume command**.
+- Agents started in TRK stop when TRK stops, restarts or updates (`trk stop` and `trk update` say how many). Their conversations are saved: resume them from their cards.
+
 ## Stopping TRK
 
 ```sh
@@ -121,12 +141,13 @@ Before writing, TRK saves each original as `<file>.trk-backup-YYYYMMDD-HHMMSS`. 
 | "A hook could approve or deny things" | Async hook output is discarded by Claude Code, and `trk hook` prints nothing anyway. TRK cannot approve, deny, block or inject anything into Claude's context. |
 | "If TRK crashes, Claude breaks" | Every `trk` call gives up after ~200 ms and **always exits 0**. Daemon down → silent no-op. The next call restarts it. |
 | "It messes up my status line" | A chained status line prints your command's output byte for byte. TRK only reads the JSON on the way through. |
+| "The dashboard can start programs" | Only if you turn terminals on, and then only `claude` in a folder you pick, through the same localhost + Origin/Host guard as everything else; a web page can't switch them on for itself (the setting lives in the daemon). |
 | "It phones home" | The daemon and hooks never go online: the daemon binds `127.0.0.1` only, and requests from web pages (foreign `Origin`/`Host`) are refused. The only outbound request is `trk open` asking GitHub, at most once a day, whether a newer release exists. Turn it off with `TRK_NO_UPDATE_CHECK=1`. |
 | "It rewrites my settings badly" | Invalid JSON → TRK stops and writes nothing. Key order, number formatting, file permissions and symlinked dotfiles are preserved. |
 
 ### Good to know
 
-- **What gets stored.** Hook payloads go into a local SQLite file in your data dir (`~/.local/share/trk/` on Linux). They can include your prompts, shell commands, file paths and snippets of file contents (large values are trimmed). Nothing leaves your machine. Delete the folder any time to wipe it.
+- **What gets stored.** Hook payloads go into a local SQLite file in your data dir (`~/.local/share/trk/` on Linux). They can include your prompts, shell commands, file paths and snippets of file contents (large values are trimmed). The Stats page is computed from this file. Nothing leaves your machine. Delete the folder any time to wipe it.
 - **Agents calling `trk`.** Because of the CLAUDE.md block, agents run `trk …` through their Bash tool, which may trigger a permission prompt the first time. To allow it once and for all, add this to `~/.claude/settings.json`:
   ```json
   "permissions": { "allow": ["Bash(trk:*)"] }
@@ -177,6 +198,7 @@ make clean         # remove bin/, dist/ and dev data
 ```
 
 The dashboard (`web/`) is embedded in the binary, so restart the daemon after changing it (`make stop demo`).
+To try dashboard terminals without starting real agents, run the dev daemon with `TRK_AGENT_COMMAND=bash`: terminals then run that program instead of `claude`.
 
 ## License
 
