@@ -58,14 +58,18 @@ func TestPerCellBars(t *testing.T) {
 	}
 }
 
-// The out-of-the-box card layout (picked by the user, 2026-10-04; widgets added the same night).
+// The out-of-the-box card layout (picked by the user, 2026-10-04; widgets added the same night;
+// 2026-10-06: Files touched replaces Lines changed, Needs you and Collisions start hidden).
 func TestDefaultLayout(t *testing.T) {
 	js, _ := os.ReadFile("app.js")
-	want := `Default: { order: ["task", "progress", "step", "reality", "prompt", "reply", "lines", "busy", "subagents", "ctx", "tools", "model", "files"], ` +
-		`on: ["task", "progress", "step", "reality", "prompt", "reply", "lines", "busy", "subagents", "ctx"], tools: 3, hints: true, reserve: false, ` +
+	want := `Default: { order: ["task", "progress", "step", "reality", "prompt", "reply", "files", "busy", "subagents", "ctx", "tools", "model", "lines"], ` +
+		`on: ["task", "progress", "step", "reality", "prompt", "reply", "files", "busy", "subagents", "ctx"], tools: 3, hints: true, reserve: false, ` +
 		`footer: ["elapsed", "cost", "model", "last"] },`
 	if !strings.Contains(string(js), want) {
 		t.Fatalf("app.js Default preset is not the chosen default:\n%s", want)
+	}
+	if !strings.Contains(string(js), `const DEFAULT_AREAS = { needs: false, collisions: false, timeline: true, limits: true };`) {
+		t.Fatal("Needs you and Collisions should start hidden")
 	}
 }
 

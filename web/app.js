@@ -117,8 +117,10 @@ const WIDGETS = {
 };
 const FOOTER_STATS = { elapsed: "Elapsed", tokens: "Tokens", cost: "Cost", model: "Model", last: "Last activity", calls: "Tool calls" };
 const AREAS = { needs: "Needs you", collisions: "Collisions", timeline: "Timeline (bottom)", limits: "Plan usage (header)" };
+// Needs you and Collisions start hidden: the cards' chips and glow already show both.
+const DEFAULT_AREAS = { needs: false, collisions: false, timeline: true, limits: true };
 const PRESETS = {
-  Default: { order: ["task", "progress", "step", "reality", "prompt", "reply", "lines", "busy", "subagents", "ctx", "tools", "model", "files"], on: ["task", "progress", "step", "reality", "prompt", "reply", "lines", "busy", "subagents", "ctx"], tools: 3, hints: true, reserve: false, footer: ["elapsed", "cost", "model", "last"] },
+  Default: { order: ["task", "progress", "step", "reality", "prompt", "reply", "files", "busy", "subagents", "ctx", "tools", "model", "lines"], on: ["task", "progress", "step", "reality", "prompt", "reply", "files", "busy", "subagents", "ctx"], tools: 3, hints: true, reserve: false, footer: ["elapsed", "cost", "model", "last"] },
   Compact: { on: ["task", "progress", "ctx"], tools: 1, hints: false, reserve: false, footer: ["elapsed", "cost"] },
   Detailed: { on: ["task", "step", "progress", "reality", "tools", "ctx", "model", "files", "prompt", "reply", "lines", "busy", "subagents"], tools: 5, hints: true, reserve: true, footer: ["elapsed", "tokens", "cost", "last"] },
   "Context watch": { on: ["ctx", "task", "progress"], tools: 3, hints: true, reserve: false, footer: ["tokens", "cost"] },
@@ -128,7 +130,7 @@ function presetLayout(name) {
   const first = p.order || p.on; // a preset may place hidden widgets too
   const order = [...first, ...Object.keys(WIDGETS).filter((id) => !first.includes(id))];
   return { preset: name, slots: order.map((id) => ({ id, on: p.on.includes(id) })), tools: p.tools, hints: p.hints,
-    reserve: p.reserve, footer: [...p.footer], areas: { needs: true, collisions: true, timeline: true, limits: true }, grid: { cols: 0, rows: 0 } };
+    reserve: p.reserve, footer: [...p.footer], areas: { ...DEFAULT_AREAS }, grid: { cols: 0, rows: 0 } };
 }
 // Card grid: columns and rows on screen; 0 means automatic.
 const GRID_COLS = 6, GRID_ROWS = 4;
@@ -149,7 +151,7 @@ function loadLayout() {
     hints: saved.hints !== false,
     reserve: saved.reserve !== false,
     footer: (Array.isArray(saved.footer) ? saved.footer : def.footer).filter((k) => FOOTER_STATS[k]).slice(0, 4),
-    areas: Object.fromEntries(Object.keys(AREAS).map((k) => [k, !saved.areas || saved.areas[k] !== false])),
+    areas: Object.fromEntries(Object.keys(AREAS).map((k) => [k, saved.areas && typeof saved.areas[k] === "boolean" ? saved.areas[k] : DEFAULT_AREAS[k]])),
     grid: { cols: gridNum(saved.grid && saved.grid.cols, GRID_COLS), rows: gridNum(saved.grid && saved.grid.rows, GRID_ROWS) },
   };
 }
