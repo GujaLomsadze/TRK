@@ -1,6 +1,6 @@
-/* Stats page (stats.html). Sized for 100% zoom on a 1080p+ screen; the two limits sit side by side when there is room. */
+/* Stats page (stats.html). Each limit gets the full width, 5-hour on top and weekly below it, at any window size. */
 body { padding-bottom: 16px; font-size: 15px; }
-.stats-page { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 760px), 1fr)); gap: 16px; align-items: start; }
+.stats-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
 .chart-panel { padding: 18px 20px 16px; display: grid; gap: 14px; min-width: 0; container-type: inline-size; }
 .chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; }
 .chart-head h2 { margin: 0; font-size: 20px; letter-spacing: 0.06em; }
