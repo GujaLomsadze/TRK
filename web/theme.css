@@ -322,7 +322,13 @@ dialog.agents.resizing .ag-term { pointer-events: none; }
 .ag-grip:focus-visible { outline: none; }
 .ag-head { display: flex; align-items: center; gap: 10px 12px; padding: 12px 14px; border-bottom: 1px solid var(--rule-soft); flex-wrap: wrap;
   padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
-.ag-head .drawer-title { min-width: 0; flex: 1; }
+.ag-head .drawer-title { min-width: 0; flex: 0 1 auto; }
+.ag-rename { flex: none; background: transparent; border: 1px solid var(--rule-soft); color: var(--muted); width: 32px; height: 32px; cursor: pointer;
+  font: 16px/1 var(--font-read); margin-right: auto; }
+.ag-rename:hover { color: var(--text); border-color: var(--border); }
+.ag-title-form { flex: 1; min-width: 200px; display: grid; gap: 2px; }
+.ag-title-form input { background: var(--bg); color: var(--text); border: 1px solid var(--accent); font: 22px/1 var(--font-deco); letter-spacing: 0.06em;
+  padding: 6px 10px; border-radius: var(--radius); width: 100%; }
 .ag-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .ag-font { display: flex; align-items: center; gap: 2px; }
 .ag-font .btn { min-width: 40px; justify-content: center; padding: 0 8px; }

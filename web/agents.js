@@ -68,11 +68,52 @@ window.TRKAgents = (function () {
     $("ag-stop").textContent = t && t.exited ? "Remove" : "Stop claude";
     $("ag-resume").hidden = !(t && t.exited && resumable(t.session_id) && enabled());
     $("agents-title").textContent = t ? termName(t) : s ? s.name : "+ New agent";
+    if (!renaming) $("ag-rename").hidden = !session(currentSid());
   }
+
+  // ---- rename: ✎ swaps the title for a field; Enter saves, Esc or leaving cancels, empty restores ----
+  let renaming = false;
+  const currentSid = () => selected.startsWith("s:") ? selected.slice(2) : (find(selected) || {}).session_id || "";
+  function startRename() {
+    const s = session(currentSid());
+    if (!s) return;
+    renaming = true;
+    const input = $("ag-title-input");
+    input.value = s.title || "";
+    input.placeholder = s.auto_name || s.name;
+    $("ag-title-hint").textContent = "Enter saves · Esc cancels · empty = " + (s.auto_name || s.name);
+    $("agents-title").hidden = $("ag-rename").hidden = true;
+    $("ag-title-form").hidden = false;
+    input.focus();
+    input.select();
+  }
+  function endRename() {
+    renaming = false;
+    $("ag-title-form").hidden = true;
+    $("agents-title").hidden = false;
+    drawActions();
+  }
+  $("ag-rename").addEventListener("click", startRename);
+  $("ag-title-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const sid = currentSid(), title = $("ag-title-input").value;
+    try {
+      const r = await fetch("/v1/sessions/" + encodeURIComponent(sid) + "/title", { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) });
+      if (!r.ok) throw new Error((await r.text()).trim());
+      const s = session(sid); // show it now; the next snapshot confirms
+      if (s) { s.title = title.trim(); if (s.title) { s.auto_name = s.auto_name || s.name; s.name = s.title; } else if (s.auto_name) s.name = s.auto_name; }
+      endRename();
+      drawTabs();
+    } catch (x) { $("ag-title-hint").textContent = String(x.message || x); }
+  });
+  $("ag-title-input").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); endRename(); } });
+  $("ag-title-input").addEventListener("blur", () => setTimeout(() => { if (renaming && document.activeElement !== $("ag-title-input")) endRename(); }, 150));
 
   function dropViewer() { if (viewer) { viewer.dispose(); viewer = null; } }
 
   function show(id, from) {
+    if (renaming) endRename();
     dropViewer();
     selected = id;
     newFrom = id === "new" ? from || null : null;

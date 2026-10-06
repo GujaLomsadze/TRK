@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/GujaLomsadze/trk/internal/derive"
 	"github.com/GujaLomsadze/trk/internal/gitinfo"
@@ -40,8 +42,9 @@ type gitCached struct {
 const DefaultHideAfter int64 = 5 * 3600 * 1000
 
 var (
-	ErrNotFound = errors.New("no such session")
-	ErrActive   = errors.New("only idle or done sessions can be dismissed")
+	ErrNotFound  = errors.New("no such session")
+	ErrActive    = errors.New("only idle or done sessions can be dismissed")
+	ErrTitleLong = errors.New("title is too long")
 )
 
 type Fleet struct {
@@ -117,6 +120,31 @@ func (f *Fleet) Dismiss(id string, now int64) error {
 		return ErrActive
 	}
 	e.S.DismissedAt = now
+	return nil
+}
+
+// MaxTitle is the longest card title, in characters.
+const MaxTitle = 80
+
+// SetTitle gives a session a chosen card title; an empty one goes back to the automatic name.
+// Control characters are dropped and runs of space collapse to one.
+func (f *Fleet) SetTitle(id, title string) error {
+	title = strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, title)), " ")
+	if utf8.RuneCountInString(title) > MaxTitle {
+		return ErrTitleLong
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	e, ok := f.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	e.S.Title = title
 	return nil
 }
 

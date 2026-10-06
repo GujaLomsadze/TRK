@@ -55,6 +55,11 @@
   <div class="ag-grip" id="ag-grip" role="separator" aria-orientation="vertical" aria-label="Resize the drawer" tabindex="0" title="Drag to resize · double-click to reset"></div>
   <div class="ag-head">
     <h2 class="drawer-title one" id="agents-title">+ New agent</h2>
+    <button class="ag-rename" id="ag-rename" type="button" hidden aria-label="Rename this card" title="Rename this card">✎</button>
+    <form class="ag-title-form" id="ag-title-form" hidden>
+      <input id="ag-title-input" maxlength="80" autocomplete="off" spellcheck="false" aria-label="Card title">
+      <span class="meta" id="ag-title-hint"></span>
+    </form>
     <div class="ag-actions">
       <div class="ag-font" id="ag-font" role="group" aria-label="Terminal font size" hidden>
         <button class="btn btn-secondary" type="button" data-font="-1" aria-label="Smaller terminal text" title="Smaller text">A−</button>

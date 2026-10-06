@@ -35,6 +35,7 @@ type SessionView struct {
 	Recent    []CallView        `json:"recent"`
 	Timeline  []Block           `json:"timeline"`
 	Attention bool              `json:"attention"`
+	AutoName  string            `json:"auto_name,omitempty"` // the name TRK would show, when a title replaces it
 	Need      *derive.Need      `json:"need,omitempty"`
 	Ctx       derive.CtxBand    `json:"ctx"`
 	Calls     []derive.ToolCall `json:"calls,omitempty"`
@@ -164,6 +165,9 @@ func buildView(e *entry, now int64) SessionView {
 	if sv.Name == "" {
 		sv.Name = slug(sv.Task, sv.SessionID)
 	}
+	if sv.Title != "" {
+		sv.AutoName, sv.Name = sv.Name, sv.Title
+	}
 	switch {
 	case t.Pending != nil:
 		n := *t.Pending
@@ -228,13 +232,14 @@ func buildView(e *entry, now int64) SessionView {
 	return sv
 }
 
+// disambiguate suffixes automatic names that collide; a chosen title is left as typed.
 func disambiguate(ss []SessionView) {
 	count := map[string]int{}
 	for _, s := range ss {
 		count[s.Name]++
 	}
 	for i := range ss {
-		if count[ss[i].Name] > 1 {
+		if count[ss[i].Name] > 1 && ss[i].Title == "" {
 			id := ss[i].SessionID
 			if len(id) > 4 {
 				id = id[:4]

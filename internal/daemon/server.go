@@ -51,6 +51,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/sessions", s.getSessions)
 	mux.HandleFunc("GET /v1/sessions/{id}", s.getSession)
 	mux.HandleFunc("POST /v1/sessions/{id}/dismiss", s.dismiss)
+	mux.HandleFunc("POST /v1/sessions/{id}/title", s.setTitle)
 	mux.HandleFunc("POST /v1/settings", s.settings)
 	mux.HandleFunc("GET /v1/terms", s.listTerms)
 	mux.HandleFunc("POST /v1/terms", s.startTerm)
@@ -169,6 +170,34 @@ func (s *Server) dismiss(w http.ResponseWriter, r *http.Request) {
 	if row, ok := s.fl.SessionRow(id); ok {
 		if err := s.st.UpsertSession(row); err != nil {
 			s.log.Printf("persist dismiss: %v", err)
+		}
+	}
+	s.dirty.Store(true)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setTitle renames a card: {"title": "..."}; an empty title restores the automatic name.
+func (s *Server) setTitle(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body struct {
+		Title *string `json:"title"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil || body.Title == nil {
+		http.Error(w, `want {"title": "..."} ("" restores the automatic name)`, http.StatusBadRequest)
+		return
+	}
+	switch err := s.fl.SetTitle(id, *body.Title); err {
+	case nil:
+	case fleet.ErrNotFound:
+		http.NotFound(w, r)
+		return
+	default:
+		http.Error(w, fmt.Sprintf("%v (at most %d characters)", err, fleet.MaxTitle), http.StatusBadRequest)
+		return
+	}
+	if row, ok := s.fl.SessionRow(id); ok {
+		if err := s.st.UpsertSession(row); err != nil {
+			s.log.Printf("persist title: %v", err)
 		}
 	}
 	s.dirty.Store(true)

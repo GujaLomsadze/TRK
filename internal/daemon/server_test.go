@@ -320,3 +320,63 @@ func TestSettingsEndpoint(t *testing.T) {
 		}
 	}
 }
+
+func TestTitleEndpoint(t *testing.T) {
+	ts, s := newTestServer(t)
+	post(t, ts.URL, `{"source":"hook","payload":{"session_id":"A","hook_event_name":"Stop","cwd":"/tmp/proj"}}`, nil)
+	post(t, ts.URL, `{"source":"hook","payload":{"session_id":"B","hook_event_name":"Stop","cwd":"/tmp/proj"}}`, nil)
+	title := func(id, body string) int {
+		resp, err := http.Post(ts.URL+"/v1/sessions/"+id+"/title", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	var v fleet.View
+	for deadline := time.Now().Add(3 * time.Second); len(v.Sessions) < 2; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("sessions never appeared")
+		}
+		getJSON(t, ts.URL+"/v1/sessions", &v)
+	}
+	if c := title("A", `{"title":"  Parquet\tbug  hunt \n"}`); c != http.StatusNoContent {
+		t.Fatalf("set title = %d", c)
+	}
+	for _, bad := range []struct{ id, body string }{{"A", `{}`}, {"A", `{"title":"` + strings.Repeat("x", 81) + `"}`}} {
+		if c := title(bad.id, bad.body); c != http.StatusBadRequest {
+			t.Errorf("%s %s = %d, want 400", bad.id, bad.body, c)
+		}
+	}
+	if c := title("nope", `{"title":"x"}`); c != http.StatusNotFound {
+		t.Fatalf("unknown = %d", c)
+	}
+	getJSON(t, ts.URL+"/v1/sessions", &v)
+	names := map[string]fleet.SessionView{}
+	for _, sv := range v.Sessions {
+		names[sv.SessionID] = sv
+	}
+	// the titled card shows its title; the other no longer collides, so it loses its #suffix
+	if a := names["A"]; a.Name != "Parquet bug hunt" || a.Title != "Parquet bug hunt" || a.AutoName != "proj" {
+		t.Fatalf("A = %q title %q auto %q", a.Name, a.Title, a.AutoName)
+	}
+	if b := names["B"]; b.Name != "proj" {
+		t.Fatalf("B = %q", b.Name)
+	}
+	rows, _ := s.st.Sessions()
+	for _, r := range rows {
+		if r.SessionID == "A" && r.Title != "Parquet bug hunt" {
+			t.Fatalf("title not persisted: %+v", r)
+		}
+	}
+	if c := title("A", `{"title":""}`); c != http.StatusNoContent {
+		t.Fatalf("clear = %d", c)
+	}
+	var after fleet.View // fresh: decoding into v would keep its old omitempty fields
+	getJSON(t, ts.URL+"/v1/sessions", &after)
+	for _, sv := range after.Sessions {
+		if sv.SessionID == "A" && (sv.Title != "" || !strings.HasPrefix(sv.Name, "proj")) {
+			t.Fatalf("after clear: %+v", sv)
+		}
+	}
+}

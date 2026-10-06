@@ -283,7 +283,7 @@ function card(s) {
       s.status === "idle" || s.status === "done"
         ? h("button", { class: "dismiss", type: "button", "data-dismiss": s.session_id, "aria-label": "Hide " + s.name, title: "Hide this card (it comes back if the session gets busy again)" }, "✕")
         : null,
-      h("div", { class: "head-text" }, h("h3", { class: "card-name one", title: s.name }, s.name),
+      h("div", { class: "head-text" }, h("h3", { class: "card-name one", title: s.auto_name ? `${s.name} (${s.auto_name})` : s.name }, s.name),
         h("div", { class: "meta one", title: where }, s.in_trk ? h("span", { class: "in-trk", title: "Running in a TRK terminal" }, "⌨ ") : null, where || DASH)),
       // WORKING: light runs through the letters (the text needs its own box for background-clip)
       h("span", { class: "chip chip-" + tone }, tone === "work" ? h("span", { class: "shine" }, label) : label)),

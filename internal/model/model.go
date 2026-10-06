@@ -27,6 +27,7 @@ type Event struct {
 type Session struct {
 	SessionID   string   `json:"session_id"`
 	Name        string   `json:"name"`
+	Title       string   `json:"title,omitempty"` // chosen in the dashboard; shown instead of Name
 	Cwd         string   `json:"cwd"`
 	Repo        string   `json:"repo"`
 	Branch      string   `json:"branch"`

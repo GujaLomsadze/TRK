@@ -46,7 +46,8 @@ ALTER TABLE sessions ADD COLUMN lines_removed INTEGER;
 ALTER TABLE sessions ADD COLUMN api_ms INTEGER;
 ALTER TABLE sessions ADD COLUMN wall_ms INTEGER;
 ALTER TABLE sessions ADD COLUMN subagents TEXT;
-ALTER TABLE sessions ADD COLUMN bg_running INTEGER;`}
+ALTER TABLE sessions ADD COLUMN bg_running INTEGER;`, `
+ALTER TABLE sessions ADD COLUMN title TEXT;`}
 
 type Store struct{ db *sql.DB }
 
@@ -139,8 +140,8 @@ func (s *Store) SessionEvents(id string, limit int) ([]model.Event, error) {
 func (s *Store) UpsertSession(x model.Session) error {
 	_, err := s.db.Exec(`INSERT INTO sessions(session_id, name, cwd, repo, branch, model, task, step_text, step_i, step_n, status,
   ctx_pct, ctx_size, cost_usd, tokens_in, tokens_out, started_at, last_event_at, dismissed_at,
-  last_prompt, last_prompt_at, last_reply, last_reply_at, lines_added, lines_removed, api_ms, wall_ms, subagents, bg_running)
-VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  last_prompt, last_prompt_at, last_reply, last_reply_at, lines_added, lines_removed, api_ms, wall_ms, subagents, bg_running, title)
+VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(session_id) DO UPDATE SET name=excluded.name, cwd=excluded.cwd, repo=excluded.repo, branch=excluded.branch,
   model=excluded.model, task=excluded.task, step_text=excluded.step_text, step_i=excluded.step_i, step_n=excluded.step_n,
   status=excluded.status, ctx_pct=excluded.ctx_pct, ctx_size=excluded.ctx_size, cost_usd=excluded.cost_usd,
@@ -148,11 +149,11 @@ ON CONFLICT(session_id) DO UPDATE SET name=excluded.name, cwd=excluded.cwd, repo
   dismissed_at=excluded.dismissed_at, last_prompt=excluded.last_prompt, last_prompt_at=excluded.last_prompt_at,
   last_reply=excluded.last_reply, last_reply_at=excluded.last_reply_at, lines_added=excluded.lines_added,
   lines_removed=excluded.lines_removed, api_ms=excluded.api_ms, wall_ms=excluded.wall_ms, subagents=excluded.subagents,
-  bg_running=excluded.bg_running`,
+  bg_running=excluded.bg_running, title=excluded.title`,
 		x.SessionID, x.Name, x.Cwd, x.Repo, x.Branch, x.Model, x.Task, x.StepText, x.StepI, x.StepN, x.Status,
 		x.CtxPct, x.CtxSize, x.CostUSD, x.TokensIn, x.TokensOut, x.StartedAt, x.LastEventAt, x.DismissedAt,
 		x.LastPrompt, x.LastPromptAt, x.LastReply, x.LastReplyAt, x.LinesAdded, x.LinesRemoved, x.APIMs, x.WallMs,
-		subagentsJSON(x.Subagents), x.BgRunning)
+		subagentsJSON(x.Subagents), x.BgRunning, x.Title)
 	return err
 }
 
@@ -171,7 +172,7 @@ func (s *Store) Sessions() ([]model.Session, error) {
   coalesce(started_at,0), coalesce(last_event_at,0), coalesce(dismissed_at,0),
   coalesce(last_prompt,''), coalesce(last_prompt_at,0), coalesce(last_reply,''), coalesce(last_reply_at,0),
   coalesce(lines_added,0), coalesce(lines_removed,0), coalesce(api_ms,0), coalesce(wall_ms,0), coalesce(subagents,''),
-  coalesce(bg_running,0) FROM sessions`)
+  coalesce(bg_running,0), coalesce(title,'') FROM sessions`)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +185,7 @@ func (s *Store) Sessions() ([]model.Session, error) {
 			&x.StepI, &x.StepN, &x.Status, &x.CtxPct, &x.CtxSize, &x.CostUSD, &x.TokensIn, &x.TokensOut,
 			&x.StartedAt, &x.LastEventAt, &x.DismissedAt,
 			&x.LastPrompt, &x.LastPromptAt, &x.LastReply, &x.LastReplyAt, &x.LinesAdded, &x.LinesRemoved, &x.APIMs, &x.WallMs,
-			&subs, &x.BgRunning); err != nil {
+			&subs, &x.BgRunning, &x.Title); err != nil {
 			return nil, err
 		}
 		if subs != "" {
